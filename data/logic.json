@@ -1,0 +1,12 @@
+{
+  "app": {"name":"EduManager","version":"14.0"},
+  "architecture": {
+    "html": "index.html",
+    "css": "styles.css",
+    "data": "data/config.js",
+    "state": "js/state.js",
+    "modules": ["js/students.js","js/payments.js","js/reports.js","js/caja.js","js/materiales.js"],
+    "entryPoint": "js/main.js"
+  },
+  "principles": ["separation of concerns","ES modules","single responsibility","shared application state","event listeners instead of inline JavaScript"]
+}
