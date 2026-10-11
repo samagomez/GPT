@@ -89,8 +89,17 @@ function renderActivity(){
 }
 
 function showSection(id){
+  const validSection = document.getElementById(id);
+  if(!validSection || !validSection.classList.contains('section')) id = 'dashboard';
+  const catalogSections = ['catalog-materiales','catalog-mensualidades','catalog-estudiantes','catalog-docentes'];
+  const inCatalogs = catalogSections.includes(id);
   $$('.section').forEach(x => x.classList.toggle('active-section', x.id === id));
-  $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.section === id));
+  $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.section === id || (x.dataset.section === 'settings' && inCatalogs)));
+  $$('.submenu-item').forEach(x => x.classList.toggle('active', x.dataset.section === id));
+  const submenu = $('#settingsSubmenu');
+  if(submenu) submenu.classList.toggle('expanded', id === 'settings' || inCatalogs);
+  const chevron = $('#settingsNav .nav-chevron');
+  if(chevron) chevron.style.transform = (id === 'settings' || inCatalogs) ? 'rotate(180deg)' : '';
   if(location.hash !== '#'+id) history.replaceState(null,'','#'+id);
   $('#sidebar').classList.remove('open');
 }
@@ -405,6 +414,277 @@ function initMateriales(){
   $('#agregarMaterialBtn').addEventListener('click',agregarMaterial);$('#limpiarMaterialesBtn').addEventListener('click',limpiarMateriales);$('#procesarMaterialesBtn').addEventListener('click',procesarMateriales);
 }
 
+
+// ===== Catálogo de mensualidades =====
+const MENSUALIDADES_STORAGE_KEY = 'edumanager.catalogo.mensualidades.v1';
+let mensualidadesCatalog = loadMensualidadesCatalog();
+let mensualidadEditingId = null;
+
+function loadMensualidadesCatalog(){
+  try {
+    const saved = localStorage.getItem(MENSUALIDADES_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.concepto === 'string' && Number.isFinite(Number(item.monto))) : [];
+  } catch(error) { return []; }
+}
+function saveMensualidadesCatalog(){
+  try { localStorage.setItem(MENSUALIDADES_STORAGE_KEY, JSON.stringify(mensualidadesCatalog)); }
+  catch(error) { alert('No se pudieron guardar los cambios en este navegador.'); }
+}
+function escapeCatalogText(value){
+  return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
+function renderMensualidadesCatalog(){
+  const tbody = $('#mensualidadesCatalogTable');
+  if(!tbody) return;
+  if(mensualidadesCatalog.length === 0){
+    tbody.innerHTML = '<tr><td colspan="4" class="catalog-empty">No hay mensualidades registradas en este catálogo.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = mensualidadesCatalog.map((item,index) => `<tr><td>MEN-${String(index+1).padStart(3,'0')}</td><td>${escapeCatalogText(item.concepto)}</td><td>$${Number(item.monto).toFixed(2)}</td><td><button type="button" class="view-btn" data-action="edit-mensualidad" data-id="${escapeCatalogText(item.id)}"><i class="bi bi-pencil-square"></i> Editar</button></td></tr>`).join('');
+}
+function resetMensualidadForm(){
+  const form = $('#mensualidadForm');
+  if(!form) return;
+  form.reset(); mensualidadEditingId = null;
+  $('#mensualidadFormTitle').textContent = 'Agregar mensualidad';
+  $('#guardarMensualidadBtn').innerHTML = '<i class="bi bi-plus-lg"></i> Agregar';
+  $('#mensualidadConceptoError').textContent = '';
+  $('#mensualidadMontoError').textContent = '';
+  $('#mensualidadConcepto').closest('.form-group').classList.remove('has-error');
+  $('#mensualidadMonto').closest('.form-group').classList.remove('has-error');
+}
+function editMensualidad(id){
+  const item = mensualidadesCatalog.find(row => row.id === id);
+  if(!item) return;
+  mensualidadEditingId = id;
+  $('#mensualidadConcepto').value = item.concepto;
+  $('#mensualidadMonto').value = Number(item.monto).toFixed(2);
+  $('#mensualidadFormTitle').textContent = 'Editar mensualidad';
+  $('#guardarMensualidadBtn').innerHTML = '<i class="bi bi-check-lg"></i> Guardar cambios';
+  $('#mensualidadConceptoError').textContent = '';
+  $('#mensualidadMontoError').textContent = '';
+  $('#mensualidadConcepto').closest('.form-group').classList.remove('has-error');
+  $('#mensualidadMonto').closest('.form-group').classList.remove('has-error');
+  $('#mensualidadConcepto').focus();
+}
+function submitMensualidadForm(event){
+  event.preventDefault();
+  const conceptoInput = $('#mensualidadConcepto');
+  const montoInput = $('#mensualidadMonto');
+  const concepto = conceptoInput.value.trim();
+  const montoText = montoInput.value.trim();
+  const monto = Number(montoText);
+  const conceptoError = concepto ? '' : 'Ingresa el concepto.';
+  const montoError = montoText && Number.isFinite(monto) && monto > 0 ? '' : 'Ingresa un monto mayor que cero.';
+  $('#mensualidadConceptoError').textContent = conceptoError;
+  $('#mensualidadMontoError').textContent = montoError;
+  conceptoInput.closest('.form-group').classList.toggle('has-error', Boolean(conceptoError));
+  montoInput.closest('.form-group').classList.toggle('has-error', Boolean(montoError));
+  if(conceptoError || montoError){ (conceptoError ? conceptoInput : montoInput).focus(); return; }
+  const duplicate = mensualidadesCatalog.some(item => item.concepto.toLocaleLowerCase() === concepto.toLocaleLowerCase() && item.id !== mensualidadEditingId);
+  if(duplicate){ $('#mensualidadConceptoError').textContent = 'Ya existe una mensualidad con ese concepto.'; conceptoInput.closest('.form-group').classList.add('has-error'); conceptoInput.focus(); return; }
+  if(mensualidadEditingId){
+    mensualidadesCatalog = mensualidadesCatalog.map(item => item.id === mensualidadEditingId ? {...item, concepto, monto:Number(monto.toFixed(2))} : item);
+  } else {
+    mensualidadesCatalog.push({id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `men-${Date.now()}-${Math.random().toString(16).slice(2)}`, concepto, monto:Number(monto.toFixed(2))});
+  }
+  saveMensualidadesCatalog(); renderMensualidadesCatalog(); resetMensualidadForm();
+}
+function initCatalogoMensualidades(){
+  if(!$('#mensualidadForm')) return;
+  renderMensualidadesCatalog();
+  $('#mensualidadForm').addEventListener('submit', submitMensualidadForm);
+  $('#limpiarMensualidadBtn').addEventListener('click', resetMensualidadForm);
+  $('#mensualidadesCatalogTable').addEventListener('click', event => {
+    const button = event.target.closest('[data-action="edit-mensualidad"]');
+    if(button) editMensualidad(button.dataset.id);
+  });
+}
+
+// ===== Catálogo de materiales =====
+const MATERIALES_CATALOG_STORAGE_KEY = 'edumanager.catalogo.materiales.v1';
+let materialesCatalog = loadMaterialesCatalog();
+let materialCatalogEditingId = null;
+
+function loadMaterialesCatalog(){
+  try {
+    const saved = localStorage.getItem(MATERIALES_CATALOG_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.concepto === 'string' && Number.isFinite(Number(item.monto))) : [];
+  } catch(error) { return []; }
+}
+function saveMaterialesCatalog(){
+  try { localStorage.setItem(MATERIALES_CATALOG_STORAGE_KEY, JSON.stringify(materialesCatalog)); }
+  catch(error) { alert('No se pudieron guardar los cambios en este navegador.'); }
+}
+function renderMaterialesCatalog(){
+  const tbody = $('#materialesCatalogTable');
+  if(!tbody) return;
+  if(materialesCatalog.length === 0){
+    tbody.innerHTML = '<tr><td colspan="4" class="catalog-empty">No hay materiales registrados en este catálogo.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = materialesCatalog.map((item,index) => `<tr><td>MAT-${String(index+1).padStart(3,'0')}</td><td>${escapeCatalogText(item.concepto)}</td><td>$${Number(item.monto).toFixed(2)}</td><td><button type="button" class="view-btn" data-action="edit-material-catalog" data-id="${escapeCatalogText(item.id)}"><i class="bi bi-pencil-square"></i> Editar</button></td></tr>`).join('');
+}
+function resetMaterialCatalogForm(){
+  const form = $('#materialCatalogForm');
+  if(!form) return;
+  form.reset(); materialCatalogEditingId = null;
+  $('#materialCatalogFormTitle').textContent = 'Agregar material';
+  $('#guardarMaterialCatalogBtn').innerHTML = '<i class="bi bi-plus-lg"></i> Agregar';
+  $('#materialCatalogConceptoError').textContent = '';
+  $('#materialCatalogMontoError').textContent = '';
+  $('#materialCatalogConcepto').closest('.form-group').classList.remove('has-error');
+  $('#materialCatalogMonto').closest('.form-group').classList.remove('has-error');
+}
+function editMaterialCatalog(id){
+  const item = materialesCatalog.find(row => row.id === id);
+  if(!item) return;
+  materialCatalogEditingId = id;
+  $('#materialCatalogConcepto').value = item.concepto;
+  $('#materialCatalogMonto').value = Number(item.monto).toFixed(2);
+  $('#materialCatalogFormTitle').textContent = 'Editar material';
+  $('#guardarMaterialCatalogBtn').innerHTML = '<i class="bi bi-check-lg"></i> Guardar cambios';
+  $('#materialCatalogConceptoError').textContent = '';
+  $('#materialCatalogMontoError').textContent = '';
+  $('#materialCatalogConcepto').closest('.form-group').classList.remove('has-error');
+  $('#materialCatalogMonto').closest('.form-group').classList.remove('has-error');
+  $('#materialCatalogConcepto').focus();
+}
+function submitMaterialCatalogForm(event){
+  event.preventDefault();
+  const conceptoInput = $('#materialCatalogConcepto');
+  const montoInput = $('#materialCatalogMonto');
+  const concepto = conceptoInput.value.trim();
+  const montoText = montoInput.value.trim();
+  const monto = Number(montoText);
+  const conceptoError = concepto ? '' : 'Ingresa el concepto.';
+  const montoError = montoText && Number.isFinite(monto) && monto > 0 ? '' : 'Ingresa un monto mayor que cero.';
+  $('#materialCatalogConceptoError').textContent = conceptoError;
+  $('#materialCatalogMontoError').textContent = montoError;
+  conceptoInput.closest('.form-group').classList.toggle('has-error', Boolean(conceptoError));
+  montoInput.closest('.form-group').classList.toggle('has-error', Boolean(montoError));
+  if(conceptoError || montoError){ (conceptoError ? conceptoInput : montoInput).focus(); return; }
+  const duplicate = materialesCatalog.some(item => item.concepto.toLocaleLowerCase() === concepto.toLocaleLowerCase() && item.id !== materialCatalogEditingId);
+  if(duplicate){ $('#materialCatalogConceptoError').textContent = 'Ya existe un material con ese concepto.'; conceptoInput.closest('.form-group').classList.add('has-error'); conceptoInput.focus(); return; }
+  if(materialCatalogEditingId){
+    materialesCatalog = materialesCatalog.map(item => item.id === materialCatalogEditingId ? {...item, concepto, monto:Number(monto.toFixed(2))} : item);
+  } else {
+    materialesCatalog.push({id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `mat-${Date.now()}-${Math.random().toString(16).slice(2)}`, concepto, monto:Number(monto.toFixed(2))});
+  }
+  saveMaterialesCatalog(); renderMaterialesCatalog(); resetMaterialCatalogForm();
+}
+function initCatalogoMateriales(){
+  if(!$('#materialCatalogForm')) return;
+  renderMaterialesCatalog();
+  $('#materialCatalogForm').addEventListener('submit', submitMaterialCatalogForm);
+  $('#limpiarMaterialCatalogBtn').addEventListener('click', resetMaterialCatalogForm);
+  $('#materialesCatalogTable').addEventListener('click', event => {
+    const button = event.target.closest('[data-action="edit-material-catalog"]');
+    if(button) editMaterialCatalog(button.dataset.id);
+  });
+}
+
+// ===== Catálogos de estudiantes y docentes =====
+function createPersonCatalog(cfg){
+  const { key, plural, codePrefix, storageKey, singular } = cfg;
+  const el = suffix => $('#' + key + suffix);
+  const fields = ['Nombres','Apellidos','Grado','Seccion'];
+  let items = load();
+  let editingId = null;
+
+  function load(){
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      return Array.isArray(parsed) ? parsed.filter(i => i && typeof i.id === 'string' && ['nombres','apellidos','grado','seccion'].every(k => typeof i[k] === 'string')) : [];
+    } catch(error) { return []; }
+  }
+  function save(){
+    try { localStorage.setItem(storageKey, JSON.stringify(items)); }
+    catch(error) { alert('No se pudieron guardar los cambios en este navegador.'); }
+  }
+  function clearErrors(){
+    fields.forEach(f => { el(f + 'Error').textContent = ''; el(f).closest('.form-group').classList.remove('has-error'); });
+  }
+  function render(){
+    const tbody = $('#' + plural + 'CatalogTable');
+    if(!tbody) return;
+    if(items.length === 0){
+      tbody.innerHTML = `<tr><td colspan="6" class="catalog-empty">No hay ${plural} registrados en este catálogo.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map((item,index) => `<tr><td>${codePrefix}-${String(index+1).padStart(3,'0')}</td><td>${escapeCatalogText(item.nombres)}</td><td>${escapeCatalogText(item.apellidos)}</td><td>${escapeCatalogText(item.grado)}</td><td>${escapeCatalogText(item.seccion)}</td><td><button type="button" class="view-btn" data-action="edit-${key}" data-id="${escapeCatalogText(item.id)}"><i class="bi bi-pencil-square"></i> Editar</button></td></tr>`).join('');
+  }
+  function reset(){
+    el('Form').reset(); editingId = null;
+    el('FormTitle').textContent = 'Agregar ' + singular;
+    $('#guardar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Btn').innerHTML = '<i class="bi bi-plus-lg"></i> Agregar';
+    clearErrors();
+  }
+  function edit(id){
+    const item = items.find(row => row.id === id);
+    if(!item) return;
+    editingId = id;
+    el('Nombres').value = item.nombres;
+    el('Apellidos').value = item.apellidos;
+    el('Grado').value = item.grado;
+    el('Seccion').value = item.seccion;
+    el('FormTitle').textContent = 'Editar ' + singular;
+    $('#guardar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Btn').innerHTML = '<i class="bi bi-check-lg"></i> Guardar cambios';
+    clearErrors();
+    el('Nombres').focus();
+  }
+  function submit(event){
+    event.preventDefault();
+    const data = {
+      nombres: el('Nombres').value.trim().replace(/\s+/g,' '),
+      apellidos: el('Apellidos').value.trim().replace(/\s+/g,' '),
+      grado: el('Grado').value,
+      seccion: el('Seccion').value
+    };
+    const errors = {
+      Nombres: data.nombres ? '' : 'Ingresa los nombres.',
+      Apellidos: data.apellidos ? '' : 'Ingresa los apellidos.',
+      Grado: data.grado ? '' : 'Selecciona el grado.',
+      Seccion: data.seccion ? '' : 'Selecciona la sección.'
+    };
+    fields.forEach(f => {
+      el(f + 'Error').textContent = errors[f];
+      el(f).closest('.form-group').classList.toggle('has-error', Boolean(errors[f]));
+    });
+    const firstError = fields.find(f => errors[f]);
+    if(firstError){ el(firstError).focus(); return; }
+    const norm = s => s.toLocaleLowerCase();
+    const duplicate = items.some(i => i.id !== editingId && norm(i.nombres) === norm(data.nombres) && norm(i.apellidos) === norm(data.apellidos) && i.grado === data.grado && i.seccion === data.seccion);
+    if(duplicate){
+      el('NombresError').textContent = 'Ya existe un registro con esos datos.';
+      el('Nombres').closest('.form-group').classList.add('has-error');
+      el('Nombres').focus();
+      return;
+    }
+    if(editingId){
+      items = items.map(i => i.id === editingId ? {...i, ...data} : i);
+    } else {
+      items.push({id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${key}-${Date.now()}-${Math.random().toString(16).slice(2)}`, ...data});
+    }
+    save(); render(); reset();
+  }
+  return function init(){
+    if(!el('Form')) return;
+    render();
+    el('Form').addEventListener('submit', submit);
+    $('#limpiar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Btn').addEventListener('click', reset);
+    $('#' + plural + 'CatalogTable').addEventListener('click', event => {
+      const button = event.target.closest(`[data-action="edit-${key}"]`);
+      if(button) edit(button.dataset.id);
+    });
+  };
+}
+
+const initCatalogoEstudiantes = createPersonCatalog({ key:'estudiante', plural:'estudiantes', singular:'estudiante', codePrefix:'EST', storageKey:'edumanager.catalogo.estudiantes.v1' });
+const initCatalogoDocentes = createPersonCatalog({ key:'docente', plural:'docentes', singular:'docente', codePrefix:'DOC', storageKey:'edumanager.catalogo.docentes.v1' });
+
 // ===== js/main.js =====
 
 function init(){
@@ -414,6 +694,10 @@ function init(){
   initReports();
   initCaja();
   initMateriales();
+  initCatalogoMensualidades();
+  initCatalogoMateriales();
+  initCatalogoEstudiantes();
+  initCatalogoDocentes();
   renderActivity();
   showSection(location.hash.slice(1) || 'dashboard');
   document.title = `${CONFIG.app.name} V14`;

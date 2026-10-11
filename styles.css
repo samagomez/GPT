@@ -51,3 +51,36 @@
 .dark .coverage-table td{border-color:#374151;color:#e5e7eb}
 .dark .coverage-table td.alumno-name{color:#fbbf24}
 .dark .coverage-table td.paid{color:#4ade80}
+
+
+/* Submódulo Configuración > Catálogos */
+.nav-chevron{margin-left:auto;font-size:11px!important;transition:transform .2s}
+.settings-submenu{display:none;margin:0 0 5px 0;padding:2px 0 6px 0}
+.settings-submenu.expanded{display:block}
+.submenu-label{padding:8px 12px 6px 43px;color:#a0a7b5;font-size:9px;font-weight:800;letter-spacing:.08em}
+.submenu-item{display:block;margin:2px 0 2px 28px;padding:9px 12px 9px 15px;border-left:2px solid #e8ebf2;color:#697386;text-decoration:none;font-size:13px;font-weight:600;border-radius:0 7px 7px 0}
+.submenu-item:hover,.submenu-item.active{background:#eef0ff;color:#4f46e5;border-left-color:#4f46e5}
+.catalog-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:18px}
+.catalog-shortcuts>a{display:flex;align-items:center;gap:12px;padding:16px;border:1px solid #e9ecf2;border-radius:10px;color:#4f46e5;text-decoration:none;background:#fff}
+.catalog-shortcuts>a>i:first-child{font-size:21px;width:38px;height:38px;display:grid;place-items:center;background:#eef0ff;border-radius:9px}
+.catalog-shortcuts>a>span{flex:1;color:#172033}
+.catalog-shortcuts strong,.catalog-shortcuts small{display:block}
+.catalog-shortcuts strong{font-size:13px}
+.catalog-shortcuts small{margin-top:4px;font-size:11px;color:#89919f}
+.catalog-shortcuts>a:hover{border-color:#c7c9ff;background:#fafaff}
+.catalog-empty{text-align:center;color:#9299a7;padding:28px 20px}
+.dark .submenu-item{color:#aab2c0;border-left-color:#374151}
+.dark .submenu-item:hover,.dark .submenu-item.active{background:#312e81;color:#fff;border-left-color:#818cf8}
+.dark .catalog-shortcuts>a{background:#1f2937;border-color:#374151}
+.dark .catalog-shortcuts>a>span{color:#eef2f7}
+.dark .catalog-shortcuts small,.dark .catalog-empty{color:#9ca3af}
+@media(max-width:600px){.catalog-shortcuts{grid-template-columns:1fr}}
+
+/* Catálogo de mensualidades */
+.catalog-form-panel{margin-bottom:20px}
+.catalog-form-actions{justify-content:flex-start}
+.catalog-table-panel .panel-head{align-items:center}
+.catalog-section .form-group.has-error input{border-color:#dc2626}
+.catalog-section .form-group.has-error input:focus{outline-color:#fecaca}
+.dark .catalog-section .form-group input{background:#111827;border-color:#374151;color:#eef2f7}
+.dark .catalog-section .form-group.has-error input{border-color:#f87171}

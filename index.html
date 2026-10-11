@@ -20,7 +20,14 @@
       <a class="nav-item" href="#materiales" data-section="materiales"><i class="bi bi-bag-fill"></i><span>Materiales</span></a>
       <a class="nav-item" href="#reports" data-section="reports"><i class="bi bi-bar-chart-fill"></i><span>Reportes</span></a>
       <div class="nav-label">SISTEMA</div>
-      <a class="nav-item" href="#settings" data-section="settings"><i class="bi bi-gear-fill"></i><span>Configuración</span></a>
+      <a class="nav-item" href="#settings" data-section="settings" id="settingsNav"><i class="bi bi-gear-fill"></i><span>Configuración</span><i class="bi bi-chevron-down nav-chevron"></i></a>
+      <div class="settings-submenu" id="settingsSubmenu" aria-label="Catálogos">
+        <div class="submenu-label">CATÁLOGOS</div>
+        <a class="submenu-item" href="#catalog-materiales" data-section="catalog-materiales">Materiales</a>
+        <a class="submenu-item" href="#catalog-mensualidades" data-section="catalog-mensualidades">Mensualidades</a>
+        <a class="submenu-item" href="#catalog-estudiantes" data-section="catalog-estudiantes">Estudiantes</a>
+        <a class="submenu-item" href="#catalog-docentes" data-section="catalog-docentes">Docentes</a>
+      </div>
     </nav>
     <div class="sidebar-footer"><div class="avatar">SG</div><div><strong>Administrador</strong><small>Admin</small></div></div>
   </aside>
@@ -215,7 +222,83 @@
 
       <div id="reports" class="section"><div class="page-head"><div><h1>Reportes</h1><p>Consulta comprobantes de pago por docente y grado</p></div></div><div class="panel"><div class="panel-head"><div><h2>Reporte por Grado</h2><p>Consulta el historial de pagos por grado</p></div></div><div class="table-wrap"><table><thead><tr><th>Grado</th><th>Acción</th></tr></thead><tbody id="reportsTable"></tbody></table></div></div></div>
       <div id="reportsGrade" class="section"><div class="page-head"><div><h1>Reporte por Grado</h1><p id="reportsGradeSubtitle">Mensualidades por alumno</p></div><button class="secondary-btn" id="backReports"><i class="bi bi-arrow-left"></i> Volver</button></div><div class="panel"><div class="table-wrap"><table class="coverage-table"><thead><tr id="reportsGradeHead"></tr></thead><tbody id="reportsGradeTable"></tbody></table></div></div></div>
-      <div id="settings" class="section"><div class="page-head"><div><h1>Configuración</h1><p>Configuración general del sistema</p></div></div><div class="empty-panel"><i class="bi bi-gear"></i><h2>Configuración</h2><p>Ajustes generales de EduManager.</p></div></div>
+      <div id="settings" class="section"><div class="page-head"><div><h1>Configuración</h1><p>Configuración general del sistema</p></div></div><div class="panel"><div class="panel-head"><div><h2><i class="bi bi-collection"></i> Catálogos</h2><p>Administra los catálogos básicos de EduManager</p></div></div><div class="catalog-shortcuts"><a href="#catalog-materiales" data-section="catalog-materiales"><i class="bi bi-bag"></i><span><strong>Materiales</strong><small>Catálogo de materiales</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-mensualidades" data-section="catalog-mensualidades"><i class="bi bi-calendar-month"></i><span><strong>Mensualidades</strong><small>Conceptos y montos mensuales</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-estudiantes" data-section="catalog-estudiantes"><i class="bi bi-people"></i><span><strong>Estudiantes</strong><small>Catálogo de estudiantes</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-docentes" data-section="catalog-docentes"><i class="bi bi-person-workspace"></i><span><strong>Docentes</strong><small>Catálogo de docentes</small></span><i class="bi bi-chevron-right"></i></a></div></div></div>
+      <div id="catalog-materiales" class="section catalog-section">
+        <div class="page-head"><div><h1>Catálogo de materiales</h1><p>Administra los conceptos y montos de los materiales</p></div></div>
+        <div class="panel catalog-form-panel">
+          <div class="panel-head"><div><h2><i class="bi bi-bag"></i> <span id="materialCatalogFormTitle">Agregar material</span></h2><p>Ingresa el concepto y su monto</p></div></div>
+          <form id="materialCatalogForm" class="modal-form" novalidate>
+            <div class="form-row">
+              <div class="form-group"><label for="materialCatalogConcepto">Concepto</label><input type="text" id="materialCatalogConcepto" name="concepto" maxlength="100" placeholder="Ej. Cuaderno" required><small class="field-error" id="materialCatalogConceptoError"></small></div>
+              <div class="form-group"><label for="materialCatalogMonto">Monto</label><input type="number" id="materialCatalogMonto" name="monto" min="0.01" max="999999.99" step="0.01" placeholder="0.00" required><small class="field-error" id="materialCatalogMontoError"></small></div>
+            </div>
+            <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarMaterialCatalogBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarMaterialCatalogBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+          </form>
+        </div>
+        <div class="panel catalog-table-panel">
+          <div class="panel-head"><div><h2>Materiales registrados</h2><p>Listado de conceptos configurados</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Código</th><th>Concepto</th><th>Monto</th><th>Acción</th></tr></thead><tbody id="materialesCatalogTable"></tbody></table></div>
+        </div>
+      </div>
+      <div id="catalog-mensualidades" class="section catalog-section">
+        <div class="page-head"><div><h1>Catálogo de mensualidades</h1><p>Administra los conceptos y montos de cobro</p></div></div>
+        <div class="panel catalog-form-panel">
+          <div class="panel-head"><div><h2><i class="bi bi-calendar-month"></i> <span id="mensualidadFormTitle">Agregar mensualidad</span></h2><p>Ingresa el concepto y su monto</p></div></div>
+          <form id="mensualidadForm" class="modal-form" novalidate>
+            <div class="form-row">
+              <div class="form-group"><label for="mensualidadConcepto">Concepto</label><input type="text" id="mensualidadConcepto" name="concepto" maxlength="100" placeholder="Ej. Mensualidad" required><small class="field-error" id="mensualidadConceptoError"></small></div>
+              <div class="form-group"><label for="mensualidadMonto">Monto</label><input type="number" id="mensualidadMonto" name="monto" min="0.01" max="999999.99" step="0.01" placeholder="0.00" required><small class="field-error" id="mensualidadMontoError"></small></div>
+            </div>
+            <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarMensualidadBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarMensualidadBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+          </form>
+        </div>
+        <div class="panel catalog-table-panel">
+          <div class="panel-head"><div><h2>Mensualidades registradas</h2><p>Listado de conceptos configurados</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Código</th><th>Concepto</th><th>Monto</th><th>Acción</th></tr></thead><tbody id="mensualidadesCatalogTable"></tbody></table></div>
+        </div>
+      </div>
+      <div id="catalog-estudiantes" class="section catalog-section">
+        <div class="page-head"><div><h1>Catálogo de estudiantes</h1><p>Administra los estudiantes de la institución</p></div></div>
+        <div class="panel catalog-form-panel">
+          <div class="panel-head"><div><h2><i class="bi bi-people"></i> <span id="estudianteFormTitle">Agregar estudiante</span></h2><p>Ingresa los datos del estudiante</p></div></div>
+          <form id="estudianteForm" class="modal-form" novalidate>
+            <div class="form-row">
+              <div class="form-group"><label for="estudianteNombres">Nombres</label><input type="text" id="estudianteNombres" name="nombres" maxlength="80" placeholder="Ej. Ana María" required><small class="field-error" id="estudianteNombresError"></small></div>
+              <div class="form-group"><label for="estudianteApellidos">Apellidos</label><input type="text" id="estudianteApellidos" name="apellidos" maxlength="80" placeholder="Ej. Martínez López" required><small class="field-error" id="estudianteApellidosError"></small></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label for="estudianteGrado">Grado</label><select id="estudianteGrado" name="grado" required><option value="" disabled selected>Selecciona un grado</option><option value="1°">1°</option><option value="2°">2°</option><option value="3°">3°</option><option value="4°">4°</option><option value="5°">5°</option><option value="6°">6°</option><option value="7°">7°</option><option value="8°">8°</option><option value="9°">9°</option></select><small class="field-error" id="estudianteGradoError"></small></div>
+              <div class="form-group"><label for="estudianteSeccion">Sección</label><select id="estudianteSeccion" name="seccion" required><option value="" disabled selected>Selecciona una sección</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select><small class="field-error" id="estudianteSeccionError"></small></div>
+            </div>
+            <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarEstudianteBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarEstudianteBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+          </form>
+        </div>
+        <div class="panel catalog-table-panel">
+          <div class="panel-head"><div><h2>Estudiantes registrados</h2><p>Listado de registros ingresados</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Código</th><th>Nombres</th><th>Apellidos</th><th>Grado</th><th>Sección</th><th>Acción</th></tr></thead><tbody id="estudiantesCatalogTable"></tbody></table></div>
+        </div>
+      </div>
+      <div id="catalog-docentes" class="section catalog-section">
+        <div class="page-head"><div><h1>Catálogo de docentes</h1><p>Administra los docentes de la institución</p></div></div>
+        <div class="panel catalog-form-panel">
+          <div class="panel-head"><div><h2><i class="bi bi-person-workspace"></i> <span id="docenteFormTitle">Agregar docente</span></h2><p>Ingresa los datos del docente</p></div></div>
+          <form id="docenteForm" class="modal-form" novalidate>
+            <div class="form-row">
+              <div class="form-group"><label for="docenteNombres">Nombres</label><input type="text" id="docenteNombres" name="nombres" maxlength="80" placeholder="Ej. Ana María" required><small class="field-error" id="docenteNombresError"></small></div>
+              <div class="form-group"><label for="docenteApellidos">Apellidos</label><input type="text" id="docenteApellidos" name="apellidos" maxlength="80" placeholder="Ej. Martínez López" required><small class="field-error" id="docenteApellidosError"></small></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label for="docenteGrado">Grado</label><select id="docenteGrado" name="grado" required><option value="" disabled selected>Selecciona un grado</option><option value="1°">1°</option><option value="2°">2°</option><option value="3°">3°</option><option value="4°">4°</option><option value="5°">5°</option><option value="6°">6°</option><option value="7°">7°</option><option value="8°">8°</option><option value="9°">9°</option></select><small class="field-error" id="docenteGradoError"></small></div>
+              <div class="form-group"><label for="docenteSeccion">Sección</label><select id="docenteSeccion" name="seccion" required><option value="" disabled selected>Selecciona una sección</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select><small class="field-error" id="docenteSeccionError"></small></div>
+            </div>
+            <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarDocenteBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarDocenteBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+          </form>
+        </div>
+        <div class="panel catalog-table-panel">
+          <div class="panel-head"><div><h2>Docentes registrados</h2><p>Listado de registros ingresados</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Código</th><th>Nombres</th><th>Apellidos</th><th>Grado</th><th>Sección</th><th>Acción</th></tr></thead><tbody id="docentesCatalogTable"></tbody></table></div>
+        </div>
+      </div>
     </section>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

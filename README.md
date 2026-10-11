@@ -28,3 +28,7 @@ EduManager_v14/
 ## Ejecución
 
 Abre `index.html` en un navegador moderno. Se requiere conexión a Internet para Bootstrap Icons y las librerías jsPDF cargadas desde CDN.
+
+## Configuración › Catálogos
+
+- **Estudiantes** y **Docentes**: formulario (Nombres, Apellidos, Grado, Sección) con botones Agregar y Limpiar, edición de registros existentes y tabla de valores ingresados. Se guardan en `localStorage` (`edumanager.catalogo.estudiantes.v1` / `edumanager.catalogo.docentes.v1`), igual que Materiales y Mensualidades.
