@@ -190,11 +190,7 @@
               <div class="form-group">
                 <label for="matMaterial">Material</label>
                 <select id="matMaterial" name="material">
-                  <option value="" disabled selected>Selecciona un material</option>
-                  <option value="Uniforme" data-price="20.00">Uniforme — $20.00</option>
-                  <option value="Tela" data-price="5.00">Tela — $5.00</option>
-                  <option value="Libro Matemática 1° grado" data-price="6.00">Libro Matemática 1° grado — $6.00</option>
-                  <option value="Libro Sociales 9° grado" data-price="9.00">Libro Sociales 9° grado — $9.00</option>
+                  <option value="" disabled selected>Cargando materiales...</option>
                 </select>
                 <small class="field-error" id="matMaterialError"></small>
               </div>
@@ -301,6 +297,8 @@
       </div>
     </section>
   </main>
+  <script src="supabase-config.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="app.js"></script>

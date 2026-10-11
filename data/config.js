@@ -28,12 +28,6 @@ export const CONFIG = {
     {icon:'person-check-fill', text:'Estudiante actualizado', detail:'Sofía López', time:'Hace 1 hora'},
     {icon:'file-earmark-text-fill', text:'Reporte generado', detail:'Reporte mensual', time:'Hace 2 horas'}
   ],
-  materialPrices: {
-    'Uniforme':20.00,
-    'Tela':5.00,
-    'Libro Matemática 1° grado':6.00,
-    'Libro Sociales 9° grado':9.00
-  },
   paymentRules: {
     moraPorMes: 3.00,
     valorMensualidad: 25.00,

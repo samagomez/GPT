@@ -29,12 +29,6 @@ const CONFIG = {
     {icon:'person-check-fill', text:'Estudiante actualizado', detail:'Sofía López', time:'Hace 1 hora'},
     {icon:'file-earmark-text-fill', text:'Reporte generado', detail:'Reporte mensual', time:'Hace 2 horas'}
   ],
-  materialPrices: {
-    'Uniforme':20.00,
-    'Tela':5.00,
-    'Libro Matemática 1° grado':6.00,
-    'Libro Sociales 9° grado':9.00
-  },
   paymentRules: {
     moraPorMes: 3.00,
     valorMensualidad: 25.00,
@@ -100,6 +94,7 @@ function showSection(id){
   if(submenu) submenu.classList.toggle('expanded', id === 'settings' || inCatalogs);
   const chevron = $('#settingsNav .nav-chevron');
   if(chevron) chevron.style.transform = (id === 'settings' || inCatalogs) ? 'rotate(180deg)' : '';
+  if(id === 'materiales' && typeof loadMaterialesSelect === 'function') loadMaterialesSelect();
   if(location.hash !== '#'+id) history.replaceState(null,'','#'+id);
   $('#sidebar').classList.remove('open');
 }
@@ -134,6 +129,8 @@ function initUI(){
 function initStudents(){
   renderStudents(CONFIG.students,'#studentTable');
   renderStudents(CONFIG.students,'#studentTableFull');
+  const catalogTable = $('#catalogStudentsTable');
+  if(catalogTable) catalogTable.innerHTML = CONFIG.students.map(s => `<tr><td>${s.nie}</td><td><div class="student"><div class="mini-avatar">${s.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><strong>${s.name}</strong></div></td><td>${s.grade}</td><td><span class="status ${s.status==='Activo'?'active':'pending'}">${s.status}</span></td></tr>`).join('');
 }
 
 // ===== js/payments.js =====
@@ -391,11 +388,35 @@ function renderMaterialesCart(){
   else {$('#materialesCartHint').style.display='none';tbody.innerHTML=state.materialesCart.map((it,i)=>`<tr><td>${it.material}</td><td>${it.qty}</td><td>$${it.price.toFixed(2)}</td><td>$${(it.price*it.qty).toFixed(2)}</td><td><button type="button" class="view-btn" data-action="remove-material" data-index="${i}">Quitar</button></td></tr>`).join('');}
   const total=state.materialesCart.reduce((sum,it)=>sum+it.price*it.qty,0); $('#materialesTotal').textContent=`$${total.toFixed(2)}`; $('#procesarMaterialesBtn').disabled=state.materialesCart.length===0;
 }
+let materialesDisponibles = [];
+async function loadMaterialesSelect(){
+  const select=$('#matMaterial'), error=$('#matMaterialError'); if(!select) return;
+  const previous=select.value;
+  select.innerHTML='<option value="" disabled selected>Cargando materiales...</option>';
+  try {
+    if(!window.EduManagerSupabase || !window.EduManagerSupabase.configured) throw new Error('Falta configurar Supabase.');
+    const rows=await window.EduManagerSupabase.select('materiales');
+    materialesDisponibles=rows.map(r=>({id:String(r.id),concepto:String(r.concepto),monto:Number(r.monto)})).filter(r=>Number.isFinite(r.monto));
+    select.innerHTML='';
+    const placeholder=document.createElement('option'); placeholder.value=''; placeholder.disabled=true; placeholder.selected=true;
+    placeholder.textContent=materialesDisponibles.length?'Selecciona un material':'No hay materiales en el catálogo';
+    select.appendChild(placeholder);
+    materialesDisponibles.forEach(m=>{const o=document.createElement('option'); o.value=m.id; o.dataset.price=m.monto.toFixed(2); o.textContent=`${m.concepto} — $${m.monto.toFixed(2)}`; select.appendChild(o);});
+    if(previous && materialesDisponibles.some(m=>m.id===previous)) select.value=previous;
+    if(error) error.textContent='';
+  } catch(err) {
+    console.error(err); materialesDisponibles=[];
+    select.innerHTML='<option value="" disabled selected>No se pudo cargar el catálogo</option>';
+    if(error) error.textContent='No se pudieron cargar los materiales desde Supabase.';
+  }
+}
 function agregarMaterial(){
-  const select=$('#matMaterial'), material=select.value;
-  if(!material){$('#matMaterialError').textContent='Selecciona un material.';return;}
-  $('#matMaterialError').textContent=''; const price=CONFIG.materialPrices[material]; const existing=state.materialesCart.find(it=>it.material===material);
-  if(existing)existing.qty+=1;else state.materialesCart.push({material,qty:1,price}); select.value=''; renderMaterialesCart();
+  const select=$('#matMaterial'), id=select.value;
+  if(!id){$('#matMaterialError').textContent='Selecciona un material.';return;}
+  const item=materialesDisponibles.find(m=>m.id===id);
+  if(!item){$('#matMaterialError').textContent='El material seleccionado ya no está disponible.';return;}
+  $('#matMaterialError').textContent=''; const existing=state.materialesCart.find(it=>it.id===id);
+  if(existing)existing.qty+=1;else state.materialesCart.push({id,material:item.concepto,qty:1,price:item.monto}); select.value=''; renderMaterialesCart();
 }
 function quitarMaterial(index){const item=state.materialesCart[index];if(!item)return;item.qty-=1;if(item.qty<=0)state.materialesCart.splice(index,1);renderMaterialesCart();}
 function limpiarMateriales(){
@@ -409,11 +430,33 @@ function procesarMateriales(){
   alert(`Compra de materiales procesada\nEstudiante: ${estudiante}\nFecha: ${fecha}\n\n${detalle}\n\nTotal: $${total.toFixed(2)}`);limpiarMateriales();
 }
 function initMateriales(){
-  $('#matFecha').value=todayISO();renderMaterialesCart();
+  $('#matFecha').value=todayISO();renderMaterialesCart();loadMaterialesSelect();
   $('#materialesCartTable').addEventListener('click',e=>{const btn=e.target.closest('[data-action="remove-material"]');if(btn)quitarMaterial(Number(btn.dataset.index));});
   $('#agregarMaterialBtn').addEventListener('click',agregarMaterial);$('#limpiarMaterialesBtn').addEventListener('click',limpiarMateriales);$('#procesarMaterialesBtn').addEventListener('click',procesarMateriales);
 }
 
+
+// ===== Persistencia Supabase para catálogos =====
+async function fetchCatalog(type) {
+  if (!window.EduManagerSupabase || !window.EduManagerSupabase.configured) return type === 'materiales' ? loadMaterialesCatalog() : loadMensualidadesCatalog();
+  const rows = await window.EduManagerSupabase.select(type);
+  return rows.map(row => ({id: String(row.id), concepto: row.concepto, monto: Number(row.monto)}));
+}
+async function persistCatalogItem(type, editingId, concepto, monto) {
+  const current = type === 'materiales' ? materialesCatalog : mensualidadesCatalog;
+  const item = {id: editingId || ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${type}-${Date.now()}-${Math.random().toString(16).slice(2)}`), concepto, monto};
+  if (window.EduManagerSupabase && window.EduManagerSupabase.configured) {
+    if (editingId) await window.EduManagerSupabase.update(type, item);
+    else { const inserted = await window.EduManagerSupabase.insert(type, item); item.id = String(inserted.id); }
+    return await fetchCatalog(type);
+  }
+  const updated = editingId ? current.map(row => row.id === editingId ? item : row) : [...current, item];
+  return updated;
+}
+function showCatalogSaveError(error) {
+  console.error('Error guardando catálogo:', error);
+  alert(`No se pudo guardar el registro en Supabase. Verifica la configuración, ejecuta supabase-schema.sql y revisa las políticas RLS.\n\nDetalle: ${error.message || error}`);
+}
 
 // ===== Catálogo de mensualidades =====
 const MENSUALIDADES_STORAGE_KEY = 'edumanager.catalogo.mensualidades.v1';
@@ -421,16 +464,9 @@ let mensualidadesCatalog = loadMensualidadesCatalog();
 let mensualidadEditingId = null;
 
 function loadMensualidadesCatalog(){
-  try {
-    const saved = localStorage.getItem(MENSUALIDADES_STORAGE_KEY);
-    const parsed = saved ? JSON.parse(saved) : [];
-    return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.concepto === 'string' && Number.isFinite(Number(item.monto))) : [];
-  } catch(error) { return []; }
+  try { const saved = localStorage.getItem(MENSUALIDADES_STORAGE_KEY); const parsed = saved ? JSON.parse(saved) : []; return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.concepto === 'string' && Number.isFinite(Number(item.monto))) : []; } catch(error) { return []; }
 }
-function saveMensualidadesCatalog(){
-  try { localStorage.setItem(MENSUALIDADES_STORAGE_KEY, JSON.stringify(mensualidadesCatalog)); }
-  catch(error) { alert('No se pudieron guardar los cambios en este navegador.'); }
-}
+function saveMensualidadesCatalog(){ try { localStorage.setItem(MENSUALIDADES_STORAGE_KEY, JSON.stringify(mensualidadesCatalog)); } catch(error) { console.warn('No se pudo guardar la copia local.', error); } }
 function escapeCatalogText(value){
   return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 }
@@ -484,15 +520,11 @@ function submitMensualidadForm(event){
   if(conceptoError || montoError){ (conceptoError ? conceptoInput : montoInput).focus(); return; }
   const duplicate = mensualidadesCatalog.some(item => item.concepto.toLocaleLowerCase() === concepto.toLocaleLowerCase() && item.id !== mensualidadEditingId);
   if(duplicate){ $('#mensualidadConceptoError').textContent = 'Ya existe una mensualidad con ese concepto.'; conceptoInput.closest('.form-group').classList.add('has-error'); conceptoInput.focus(); return; }
-  if(mensualidadEditingId){
-    mensualidadesCatalog = mensualidadesCatalog.map(item => item.id === mensualidadEditingId ? {...item, concepto, monto:Number(monto.toFixed(2))} : item);
-  } else {
-    mensualidadesCatalog.push({id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `men-${Date.now()}-${Math.random().toString(16).slice(2)}`, concepto, monto:Number(monto.toFixed(2))});
-  }
-  saveMensualidadesCatalog(); renderMensualidadesCatalog(); resetMensualidadForm();
+  persistCatalogItem('mensualidades', mensualidadEditingId, concepto, Number(monto.toFixed(2))).then(items => { mensualidadesCatalog = items; saveMensualidadesCatalog(); renderMensualidadesCatalog(); resetMensualidadForm(); }).catch(error => showCatalogSaveError(error));
 }
-function initCatalogoMensualidades(){
+async function initCatalogoMensualidades(){
   if(!$('#mensualidadForm')) return;
+  try { mensualidadesCatalog = await fetchCatalog('mensualidades'); saveMensualidadesCatalog(); } catch(error) { console.error(error); }
   renderMensualidadesCatalog();
   $('#mensualidadForm').addEventListener('submit', submitMensualidadForm);
   $('#limpiarMensualidadBtn').addEventListener('click', resetMensualidadForm);
@@ -507,13 +539,7 @@ const MATERIALES_CATALOG_STORAGE_KEY = 'edumanager.catalogo.materiales.v1';
 let materialesCatalog = loadMaterialesCatalog();
 let materialCatalogEditingId = null;
 
-function loadMaterialesCatalog(){
-  try {
-    const saved = localStorage.getItem(MATERIALES_CATALOG_STORAGE_KEY);
-    const parsed = saved ? JSON.parse(saved) : [];
-    return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.concepto === 'string' && Number.isFinite(Number(item.monto))) : [];
-  } catch(error) { return []; }
-}
+function loadMaterialesCatalog(){ try { const saved = localStorage.getItem(MATERIALES_CATALOG_STORAGE_KEY); const parsed = saved ? JSON.parse(saved) : []; return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.concepto === 'string' && Number.isFinite(Number(item.monto))) : []; } catch(error) { return []; } }
 function saveMaterialesCatalog(){
   try { localStorage.setItem(MATERIALES_CATALOG_STORAGE_KEY, JSON.stringify(materialesCatalog)); }
   catch(error) { alert('No se pudieron guardar los cambios en este navegador.'); }
@@ -568,15 +594,11 @@ function submitMaterialCatalogForm(event){
   if(conceptoError || montoError){ (conceptoError ? conceptoInput : montoInput).focus(); return; }
   const duplicate = materialesCatalog.some(item => item.concepto.toLocaleLowerCase() === concepto.toLocaleLowerCase() && item.id !== materialCatalogEditingId);
   if(duplicate){ $('#materialCatalogConceptoError').textContent = 'Ya existe un material con ese concepto.'; conceptoInput.closest('.form-group').classList.add('has-error'); conceptoInput.focus(); return; }
-  if(materialCatalogEditingId){
-    materialesCatalog = materialesCatalog.map(item => item.id === materialCatalogEditingId ? {...item, concepto, monto:Number(monto.toFixed(2))} : item);
-  } else {
-    materialesCatalog.push({id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `mat-${Date.now()}-${Math.random().toString(16).slice(2)}`, concepto, monto:Number(monto.toFixed(2))});
-  }
-  saveMaterialesCatalog(); renderMaterialesCatalog(); resetMaterialCatalogForm();
+  persistCatalogItem('materiales', materialCatalogEditingId, concepto, Number(monto.toFixed(2))).then(items => { materialesCatalog = items; saveMaterialesCatalog(); renderMaterialesCatalog(); resetMaterialCatalogForm(); }).catch(error => showCatalogSaveError(error));
 }
-function initCatalogoMateriales(){
+async function initCatalogoMateriales(){
   if(!$('#materialCatalogForm')) return;
+  try { materialesCatalog = await fetchCatalog('materiales'); saveMaterialesCatalog(); } catch(error) { console.error(error); }
   renderMaterialesCatalog();
   $('#materialCatalogForm').addEventListener('submit', submitMaterialCatalogForm);
   $('#limpiarMaterialCatalogBtn').addEventListener('click', resetMaterialCatalogForm);
@@ -585,105 +607,6 @@ function initCatalogoMateriales(){
     if(button) editMaterialCatalog(button.dataset.id);
   });
 }
-
-// ===== Catálogos de estudiantes y docentes =====
-function createPersonCatalog(cfg){
-  const { key, plural, codePrefix, storageKey, singular } = cfg;
-  const el = suffix => $('#' + key + suffix);
-  const fields = ['Nombres','Apellidos','Grado','Seccion'];
-  let items = load();
-  let editingId = null;
-
-  function load(){
-    try {
-      const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      return Array.isArray(parsed) ? parsed.filter(i => i && typeof i.id === 'string' && ['nombres','apellidos','grado','seccion'].every(k => typeof i[k] === 'string')) : [];
-    } catch(error) { return []; }
-  }
-  function save(){
-    try { localStorage.setItem(storageKey, JSON.stringify(items)); }
-    catch(error) { alert('No se pudieron guardar los cambios en este navegador.'); }
-  }
-  function clearErrors(){
-    fields.forEach(f => { el(f + 'Error').textContent = ''; el(f).closest('.form-group').classList.remove('has-error'); });
-  }
-  function render(){
-    const tbody = $('#' + plural + 'CatalogTable');
-    if(!tbody) return;
-    if(items.length === 0){
-      tbody.innerHTML = `<tr><td colspan="6" class="catalog-empty">No hay ${plural} registrados en este catálogo.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = items.map((item,index) => `<tr><td>${codePrefix}-${String(index+1).padStart(3,'0')}</td><td>${escapeCatalogText(item.nombres)}</td><td>${escapeCatalogText(item.apellidos)}</td><td>${escapeCatalogText(item.grado)}</td><td>${escapeCatalogText(item.seccion)}</td><td><button type="button" class="view-btn" data-action="edit-${key}" data-id="${escapeCatalogText(item.id)}"><i class="bi bi-pencil-square"></i> Editar</button></td></tr>`).join('');
-  }
-  function reset(){
-    el('Form').reset(); editingId = null;
-    el('FormTitle').textContent = 'Agregar ' + singular;
-    $('#guardar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Btn').innerHTML = '<i class="bi bi-plus-lg"></i> Agregar';
-    clearErrors();
-  }
-  function edit(id){
-    const item = items.find(row => row.id === id);
-    if(!item) return;
-    editingId = id;
-    el('Nombres').value = item.nombres;
-    el('Apellidos').value = item.apellidos;
-    el('Grado').value = item.grado;
-    el('Seccion').value = item.seccion;
-    el('FormTitle').textContent = 'Editar ' + singular;
-    $('#guardar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Btn').innerHTML = '<i class="bi bi-check-lg"></i> Guardar cambios';
-    clearErrors();
-    el('Nombres').focus();
-  }
-  function submit(event){
-    event.preventDefault();
-    const data = {
-      nombres: el('Nombres').value.trim().replace(/\s+/g,' '),
-      apellidos: el('Apellidos').value.trim().replace(/\s+/g,' '),
-      grado: el('Grado').value,
-      seccion: el('Seccion').value
-    };
-    const errors = {
-      Nombres: data.nombres ? '' : 'Ingresa los nombres.',
-      Apellidos: data.apellidos ? '' : 'Ingresa los apellidos.',
-      Grado: data.grado ? '' : 'Selecciona el grado.',
-      Seccion: data.seccion ? '' : 'Selecciona la sección.'
-    };
-    fields.forEach(f => {
-      el(f + 'Error').textContent = errors[f];
-      el(f).closest('.form-group').classList.toggle('has-error', Boolean(errors[f]));
-    });
-    const firstError = fields.find(f => errors[f]);
-    if(firstError){ el(firstError).focus(); return; }
-    const norm = s => s.toLocaleLowerCase();
-    const duplicate = items.some(i => i.id !== editingId && norm(i.nombres) === norm(data.nombres) && norm(i.apellidos) === norm(data.apellidos) && i.grado === data.grado && i.seccion === data.seccion);
-    if(duplicate){
-      el('NombresError').textContent = 'Ya existe un registro con esos datos.';
-      el('Nombres').closest('.form-group').classList.add('has-error');
-      el('Nombres').focus();
-      return;
-    }
-    if(editingId){
-      items = items.map(i => i.id === editingId ? {...i, ...data} : i);
-    } else {
-      items.push({id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${key}-${Date.now()}-${Math.random().toString(16).slice(2)}`, ...data});
-    }
-    save(); render(); reset();
-  }
-  return function init(){
-    if(!el('Form')) return;
-    render();
-    el('Form').addEventListener('submit', submit);
-    $('#limpiar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Btn').addEventListener('click', reset);
-    $('#' + plural + 'CatalogTable').addEventListener('click', event => {
-      const button = event.target.closest(`[data-action="edit-${key}"]`);
-      if(button) edit(button.dataset.id);
-    });
-  };
-}
-
-const initCatalogoEstudiantes = createPersonCatalog({ key:'estudiante', plural:'estudiantes', singular:'estudiante', codePrefix:'EST', storageKey:'edumanager.catalogo.estudiantes.v1' });
-const initCatalogoDocentes = createPersonCatalog({ key:'docente', plural:'docentes', singular:'docente', codePrefix:'DOC', storageKey:'edumanager.catalogo.docentes.v1' });
 
 // ===== js/main.js =====
 
@@ -696,11 +619,9 @@ function init(){
   initMateriales();
   initCatalogoMensualidades();
   initCatalogoMateriales();
-  initCatalogoEstudiantes();
-  initCatalogoDocentes();
   renderActivity();
   showSection(location.hash.slice(1) || 'dashboard');
-  document.title = `${CONFIG.app.name} V14`;
+  document.title = `${CONFIG.app.name} V15`;
 }
 
 document.addEventListener('DOMContentLoaded', init);
