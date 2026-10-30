@@ -30,9 +30,7 @@ const CONFIG = {
     {icon:'file-earmark-text-fill', text:'Reporte generado', detail:'Reporte mensual', time:'Hace 2 horas'}
   ],
   paymentRules: {
-    moraPorMes: 3.00,
-    valorMensualidad: 25.00,
-    valorMatricula: 50.00
+    moraPorMes: 3.00
   }
 };
 
@@ -85,7 +83,7 @@ function renderActivity(){
 function showSection(id){
   const validSection = document.getElementById(id);
   if(!validSection || !validSection.classList.contains('section')) id = 'dashboard';
-  const catalogSections = ['catalog-materiales','catalog-mensualidades','catalog-estudiantes','catalog-docentes'];
+  const catalogSections = ['catalog-materiales','catalog-mensualidades','catalog-estudiantes','catalog-docentes','catalog-grados','catalog-secciones'];
   const inCatalogs = catalogSections.includes(id);
   $$('.section').forEach(x => x.classList.toggle('active-section', x.id === id));
   $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.section === id || (x.dataset.section === 'settings' && inCatalogs)));
@@ -94,7 +92,10 @@ function showSection(id){
   if(submenu) submenu.classList.toggle('expanded', id === 'settings' || inCatalogs);
   const chevron = $('#settingsNav .nav-chevron');
   if(chevron) chevron.style.transform = (id === 'settings' || inCatalogs) ? 'rotate(180deg)' : '';
+  if(id === 'payments' && typeof loadPaymentTeachers === 'function') loadPaymentTeachers();
   if(id === 'materiales' && typeof loadMaterialesSelect === 'function') loadMaterialesSelect();
+  if(['catalog-estudiantes','catalog-docentes','catalog-grados','catalog-secciones'].includes(id) && typeof refreshGradosSecciones === 'function') refreshGradosSecciones();
+  if(['catalog-estudiantes','catalog-docentes'].includes(id) && typeof refreshPersonCatalogs === 'function') refreshPersonCatalogs();
   if(location.hash !== '#'+id) history.replaceState(null,'','#'+id);
   $('#sidebar').classList.remove('open');
 }
@@ -129,46 +130,170 @@ function initUI(){
 function initStudents(){
   renderStudents(CONFIG.students,'#studentTable');
   renderStudents(CONFIG.students,'#studentTableFull');
-  const catalogTable = $('#catalogStudentsTable');
-  if(catalogTable) catalogTable.innerHTML = CONFIG.students.map(s => `<tr><td>${s.nie}</td><td><div class="student"><div class="mini-avatar">${s.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><strong>${s.name}</strong></div></td><td>${s.grade}</td><td><span class="status ${s.status==='Activo'?'active':'pending'}">${s.status}</span></td></tr>`).join('');
 }
 
 // ===== js/payments.js =====
 
 const REPORT_MONTH_VALUES = {
-  moraPorMes: CONFIG.paymentRules.moraPorMes,
-  valorMensualidad: CONFIG.paymentRules.valorMensualidad,
-  valorMatricula: CONFIG.paymentRules.valorMatricula
+  moraPorMes: CONFIG.paymentRules.moraPorMes
 };
 
+const PAGE_SIZE = 10;
+const pagerState = {};
+function paginate(key, list){
+  const total = list.length, pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const st = pagerState[key] || (pagerState[key] = {page:1});
+  if(st.page > pages) st.page = pages;
+  if(st.page < 1) st.page = 1;
+  const start = (st.page - 1) * PAGE_SIZE;
+  return { items: list.slice(start, start + PAGE_SIZE), page: st.page, pages, total, start };
+}
+function renderPager(key, containerId, info, rerender){
+  const box = $('#' + containerId); if(!box) return;
+  if(info.total <= PAGE_SIZE){ box.innerHTML = ''; return; }
+  const end = Math.min(info.start + PAGE_SIZE, info.total);
+  box.innerHTML = `<span class="pager-info">${info.start+1}–${end} de ${info.total}</span><div class="pager-btns"><button type="button" class="secondary-btn" data-pg="prev" ${info.page<=1?'disabled':''}><i class="bi bi-chevron-left"></i></button><span class="pager-page">Página ${info.page} de ${info.pages}</span><button type="button" class="secondary-btn" data-pg="next" ${info.page>=info.pages?'disabled':''}><i class="bi bi-chevron-right"></i></button></div>`;
+  box.onclick = e => {
+    const b = e.target.closest('[data-pg]'); if(!b || b.disabled) return;
+    pagerState[key].page += b.dataset.pg === 'next' ? 1 : -1;
+    rerender();
+  };
+}
+function resetPager(key){ pagerState[key] = {page:1}; }
+
+let paymentTeachers = [];
+function normFilter(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+
+async function loadPaymentTeachers(){
+  const tbody = $('#paymentsTable'); if(!tbody) return;
+  try {
+    let rows;
+    if(window.EduManagerSupabase && window.EduManagerSupabase.configured){
+      rows = (await window.EduManagerSupabase.select('docentes')).map(r => ({id:String(r.id), nombre:String(r.nombre), apellido:String(r.apellido), grado:String(r.grado), seccion:String(r.seccion)}));
+    } else {
+      let local = [];
+      try { local = JSON.parse(localStorage.getItem('edumanager.catalogo.docentes.v1') || '[]'); } catch(_) {}
+      rows = (Array.isArray(local) ? local : []).filter(i => i && typeof i.id === 'string').map(i => ({id:i.id, nombre:String(i.nombres||''), apellido:String(i.apellidos||''), grado:String(i.grado||''), seccion:String(i.seccion||'')}));
+    }
+    paymentTeachers = rows;
+  } catch(err) {
+    console.error(err); paymentTeachers = [];
+  }
+  renderPaymentFilters();
+  renderPayments();
+}
+
+function renderPaymentFilters(){
+  const list = $('#payFilterDocenteList'), select = $('#payFilterGrado'); if(!list || !select) return;
+  const prev = select.value;
+  const names = [...new Set(paymentTeachers.map(t => `${t.nombre} ${t.apellido}`.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+  list.innerHTML = names.map(n => `<option value="${escapeCatalogText(n)}"></option>`).join('');
+  const grados = [...new Set(paymentTeachers.map(t => t.grado))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
+  select.innerHTML = '<option value="">Todos los grados</option>' + grados.map(g => `<option value="${escapeCatalogText(g)}">${escapeCatalogText(g)}</option>`).join('');
+  if(grados.includes(prev)) select.value = prev;
+}
+
 function renderPayments(){
-  $('#paymentsTable').innerHTML = CONFIG.payments.map(p => `<tr><td><strong>${p.teacher}</strong></td><td>${p.grade}</td><td><button class="view-btn" data-action="view-payment" data-teacher="${p.teacher}" data-grade="${p.grade}">Ver</button></td></tr>`).join('');
+  const tbody = $('#paymentsTable'); if(!tbody) return;
+  const q = normFilter($('#payFilterDocente') && $('#payFilterDocente').value);
+  const g = $('#payFilterGrado') ? $('#payFilterGrado').value : '';
+  const filtered = paymentTeachers.filter(t => (!q || normFilter(`${t.nombre} ${t.apellido}`).includes(q)) && (!g || t.grado === g));
+  const info = paginate('teachers', filtered), rows = info.items;
+  renderPager('teachers', 'paymentsPager', info, renderPayments);
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="4" class="catalog-empty">${paymentTeachers.length ? 'No hay docentes que coincidan con los filtros.' : 'No hay docentes registrados en el catálogo.'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(t => {
+    const full = `${t.nombre} ${t.apellido}`.trim(), grade = `${t.grado} ${t.seccion}`.trim();
+    return `<tr><td><strong>${escapeCatalogText(full)}</strong></td><td>${escapeCatalogText(t.grado)}</td><td>${escapeCatalogText(t.seccion)}</td><td><button class="view-btn" data-action="view-payment" data-teacher="${escapeCatalogText(full)}" data-grade="${escapeCatalogText(grade)}" data-grado="${escapeCatalogText(t.grado)}" data-seccion="${escapeCatalogText(t.seccion)}">Ver</button></td></tr>`;
+  }).join('');
 }
 
+let paymentStudentsList = [];
 function renderPaymentStudents(){
-  $('#paymentStudentsTable').innerHTML = CONFIG.paymentStudents.map(s => `<tr><td>${s.nie}</td><td><strong>${s.name}</strong></td><td><button class="view-btn" data-action="make-payment" data-nie="${s.nie}" data-name="${s.name}">Pago</button></td></tr>`).join('');
+  const tbody = $('#paymentStudentsTable'); if(!tbody) return;
+  const info = paginate('students', paymentStudentsList);
+  renderPager('students', 'paymentStudentsPager', info, renderPaymentStudents);
+  if(!paymentStudentsList.length){
+    tbody.innerHTML = '<tr><td colspan="3" class="catalog-empty">No hay estudiantes registrados en este grado y sección.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = info.items.map(s => `<tr><td>${escapeCatalogText(s.code)}</td><td><strong>${escapeCatalogText(s.name)}</strong></td><td><button class="view-btn" data-action="make-payment" data-nie="${escapeCatalogText(s.code)}" data-name="${escapeCatalogText(s.name)}">Pago</button></td></tr>`).join('');
 }
 
-function viewPayment(teacher, grade){
-  $('#paymentStudentsTitle').textContent = `Estudiantes · ${grade}`;
+async function loadPaymentStudents(grado, seccion){
+  const tbody = $('#paymentStudentsTable');
+  if(tbody) tbody.innerHTML = '<tr><td colspan="3" class="catalog-empty">Cargando estudiantes...</td></tr>';
+  let rows = [];
+  try {
+    if(window.EduManagerSupabase && window.EduManagerSupabase.configured){
+      rows = (await window.EduManagerSupabase.select('estudiantes')).map(r => ({nombre:String(r.nombre), apellido:String(r.apellido), grado:String(r.grado), seccion:String(r.seccion)}));
+    } else {
+      let local = [];
+      try { local = JSON.parse(localStorage.getItem('edumanager.catalogo.estudiantes.v1') || '[]'); } catch(_) {}
+      rows = (Array.isArray(local) ? local : []).filter(i => i && typeof i.id === 'string').map(i => ({nombre:String(i.nombres||''), apellido:String(i.apellidos||''), grado:String(i.grado||''), seccion:String(i.seccion||'')}));
+    }
+  } catch(err) { console.error(err); rows = []; }
+  paymentStudentsList = rows
+    .map((r,index) => ({...r, code:`EST-${String(index+1).padStart(3,'0')}`, name:`${r.nombre} ${r.apellido}`.trim()}))
+    .filter(r => r.grado === grado && r.seccion === seccion);
   renderPaymentStudents();
+}
+
+function viewPayment(teacher, grade, grado, seccion){
+  $('#paymentStudentsTitle').textContent = `Estudiantes · ${grade}`;
+  paymentStudentsList = []; resetPager('students');
+  loadPaymentStudents(grado, seccion);
   showSection('paymentStudents');
 }
 
-function calcularMoraYTotal(mesPagar, fechaStr){
-  const fecha = new Date(fechaStr + 'T00:00:00');
-  const mesFechaNum = fecha.getMonth() + 1;
-  if(mesPagar === 'Matricula') return { mora: 0.00, total: REPORT_MONTH_VALUES.valorMatricula };
-  const mesPagarNum = MONTH_ORDER.indexOf(mesPagar) + 1;
-  const diffMeses = mesFechaNum - mesPagarNum;
-  const mora = diffMeses > 0 ? diffMeses * REPORT_MONTH_VALUES.moraPorMes : 0.00;
-  return { mora, total: REPORT_MONTH_VALUES.valorMensualidad + mora };
+function itemLabel(it){ return it.label || (it.mes === 'Matricula' ? 'Matrícula' : it.mes); }
+
+// Identifica a qué mes (o matrícula) corresponde un concepto del catálogo de mensualidades.
+function detectarMesCatalogo(concepto){
+  const norm = String(concepto).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(/\bmatricula\b/.test(norm)) return 'Matricula';
+  return MONTH_ORDER.find(m => new RegExp('\\b' + m.toLowerCase() + '\\b').test(norm)) || null;
 }
 
-function calcularItemMes(mes, fechaStr){
-  const { mora, total } = calcularMoraYTotal(mes, fechaStr);
-  const valorMes = mes === 'Matricula' ? REPORT_MONTH_VALUES.valorMatricula : REPORT_MONTH_VALUES.valorMensualidad;
-  return { mes, valorMes, mora, subtotal: total };
+// La mora solo aplica a conceptos reconocidos como mes; el monto base viene del catálogo.
+function calcularMoraYTotal(mesPagar, fechaStr, valorBase){
+  const fecha = new Date(fechaStr + 'T00:00:00');
+  const mesFechaNum = fecha.getMonth() + 1;
+  const mesPagarNum = MONTH_ORDER.indexOf(mesPagar) + 1;
+  if(mesPagar === 'Matricula' || mesPagarNum === 0) return { mora: 0.00, total: valorBase };
+  const diffMeses = mesFechaNum - mesPagarNum;
+  const mora = diffMeses > 0 ? diffMeses * REPORT_MONTH_VALUES.moraPorMes : 0.00;
+  return { mora, total: valorBase + mora };
+}
+
+function calcularItemMes(item, fechaStr){
+  const { mora, total } = calcularMoraYTotal(item.mes, fechaStr, item.valorMes);
+  return { id: item.id, mes: item.mes, label: item.label, valorMes: item.valorMes, mora, subtotal: total };
+}
+
+let mensualidadesDisponibles = [];
+async function loadMensualidadesSelect(){
+  const select = $('#pfMonth'), error = $('#pfMonthError'); if(!select) return;
+  const previous = select.value;
+  select.innerHTML = '<option value="" disabled selected>Cargando mensualidades...</option>';
+  try {
+    if(!window.EduManagerSupabase || !window.EduManagerSupabase.configured) throw new Error('Falta configurar Supabase.');
+    const rows = await window.EduManagerSupabase.select('mensualidades');
+    mensualidadesDisponibles = rows.map(r => ({id:String(r.id), concepto:String(r.concepto), monto:Number(r.monto)})).filter(r => Number.isFinite(r.monto));
+    select.innerHTML = '';
+    const placeholder = document.createElement('option'); placeholder.value=''; placeholder.disabled=true; placeholder.selected=true;
+    placeholder.textContent = mensualidadesDisponibles.length ? 'Selecciona un mes' : 'No hay mensualidades en el catálogo';
+    select.appendChild(placeholder);
+    mensualidadesDisponibles.forEach(m => { const o = document.createElement('option'); o.value=m.id; o.dataset.price=m.monto.toFixed(2); o.textContent=`${m.concepto} — $${m.monto.toFixed(2)}`; select.appendChild(o); });
+    if(previous && mensualidadesDisponibles.some(m => m.id === previous)) select.value = previous;
+    if(error && error.textContent === 'No se pudieron cargar las mensualidades desde Supabase.') error.textContent = '';
+  } catch(err) {
+    console.error(err); mensualidadesDisponibles = [];
+    select.innerHTML = '<option value="" disabled selected>No se pudo cargar el catálogo</option>';
+    if(error) error.textContent = 'No se pudieron cargar las mensualidades desde Supabase.';
+  }
 }
 
 function renderPfMesesCart(){
@@ -179,7 +304,7 @@ function renderPfMesesCart(){
     return;
   }
   $('#pfMesesCartHint').style.display = 'none';
-  tbody.innerHTML = state.pfMesesCart.map((it,i) => `<tr><td>${it.mes === 'Matricula' ? 'Matrícula' : it.mes}</td><td>$${it.valorMes.toFixed(2)}</td><td>$${it.mora.toFixed(2)}</td><td>$${it.subtotal.toFixed(2)}</td><td><button type="button" class="view-btn" data-action="remove-payment-month" data-index="${i}">Quitar</button></td></tr>`).join('');
+  tbody.innerHTML = state.pfMesesCart.map((it,i) => `<tr><td>${itemLabel(it)}</td><td>$${it.valorMes.toFixed(2)}</td><td>$${it.mora.toFixed(2)}</td><td>$${it.subtotal.toFixed(2)}</td><td><button type="button" class="view-btn" data-action="remove-payment-month" data-index="${i}">Quitar</button></td></tr>`).join('');
 }
 
 function updatePfTotals(){
@@ -190,13 +315,16 @@ function updatePfTotals(){
 }
 
 function agregarMes(){
-  const mes = $('#pfMonth').value;
+  const id = $('#pfMonth').value;
   const fecha = $('#pfDate').value;
-  if(!mes){ $('#pfMonthError').textContent = 'Selecciona un mes.'; return; }
+  if(!id){ $('#pfMonthError').textContent = 'Selecciona un mes.'; return; }
   if(!fecha){ $('#pfMonthError').textContent = 'Selecciona primero una fecha.'; return; }
-  if(state.pfMesesCart.some(it=>it.mes===mes)){ $('#pfMonthError').textContent = 'Ese mes ya fue agregado.'; return; }
+  const concepto = mensualidadesDisponibles.find(m => m.id === id);
+  if(!concepto){ $('#pfMonthError').textContent = 'El concepto seleccionado ya no está disponible.'; return; }
+  const base = { id: concepto.id, mes: detectarMesCatalogo(concepto.concepto) || concepto.concepto, label: concepto.concepto, valorMes: concepto.monto };
+  if(state.pfMesesCart.some(it => it.id === base.id || it.mes === base.mes)){ $('#pfMonthError').textContent = 'Ese mes ya fue agregado.'; return; }
   $('#pfMonthError').textContent = '';
-  state.pfMesesCart.push(calcularItemMes(mes,fecha));
+  state.pfMesesCart.push(calcularItemMes(base, fecha));
   $('#pfMonth').value = '';
   renderPfMesesCart(); updatePfTotals();
   $('#pagarBtn').disabled = false;
@@ -217,7 +345,7 @@ function calcularPago(){
   if(!fecha){ $('#pfMonthError').textContent='Selecciona una fecha.'; return; }
   if(state.pfMesesCart.length===0){ $('#pfMonthError').textContent='Agrega al menos un mes antes de calcular.'; return; }
   $('#pfMonthError').textContent='';
-  state.pfMesesCart = state.pfMesesCart.map(it=>calcularItemMes(it.mes,fecha));
+  state.pfMesesCart = state.pfMesesCart.map(it=>calcularItemMes(it,fecha));
   renderPfMesesCart(); updatePfTotals();
   $('#modalHint').textContent='Cálculo actualizado. Verifica los montos y presiona Pagar.';
   $('#pagarBtn').disabled=false;
@@ -225,7 +353,7 @@ function calcularPago(){
 
 function openPaymentModal(nie,name){
   $('#pfNie').value=nie; $('#pfStudent').value=name; $('#pfDate').value=todayISO();
-  $('#pfMonth').value=''; $('#pfMonthError').textContent=''; $('#pfMora').value=''; $('#pfTotal').value='';
+  $('#pfMonth').value=''; $('#pfMonthError').textContent=''; loadMensualidadesSelect(); $('#pfMora').value=''; $('#pfTotal').value='';
   state.pfMesesCart=[]; renderPfMesesCart(); $('#pagarBtn').disabled=true;
   $('#modalHint').textContent='Agrega uno o más meses y presiona Calcular antes de pagar.';
   $('#paymentModalOverlay').classList.add('open');
@@ -248,7 +376,7 @@ function generarComprobantePDF(registro){
   doc.setTextColor(23,32,51); doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Datos del estudiante',14,40);
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`NIE: ${registro.nie}`,14,47); doc.text(`Estudiante: ${registro.student}`,14,53); doc.text(`Fecha de pago: ${registro.date || '-'}`,14,59);
   const items=registro.items||[];
-  const rows=items.length?items.map(it=>[it.mes==='Matricula'?'Matrícula':it.mes,`$${Number(it.valorMes).toFixed(2)}`,`$${Number(it.mora).toFixed(2)}`,`$${Number(it.subtotal).toFixed(2)}`]):[[registro.month||'-','-','-',`$${Number(registro.total).toFixed(2)}`]];
+  const rows=items.length?items.map(it=>[itemLabel(it),`$${Number(it.valorMes).toFixed(2)}`,`$${Number(it.mora).toFixed(2)}`,`$${Number(it.subtotal).toFixed(2)}`]):[[registro.month||'-','-','-',`$${Number(registro.total).toFixed(2)}`]];
   doc.autoTable({startY:66,head:[['Mes','Valor','Mora','Subtotal']],body:rows,headStyles:{fillColor:primary},styles:{fontSize:10},theme:'grid'});
   const finalY=doc.lastAutoTable.finalY+10;
   const moraTotal=registro.moraTotal!==undefined?registro.moraTotal:items.reduce((s,it)=>s+Number(it.mora||0),0);
@@ -260,24 +388,51 @@ function generarComprobantePDF(registro){
   doc.save(`Comprobante_${registro.comprobante}.pdf`);
 }
 
-function pagar(e){
+let guardandoPago = false;
+async function sincronizarContadorComprobante(){
+  const sb = window.EduManagerSupabase;
+  if(!sb || !sb.configured) return;
+  const last = await sb.lastPaymentNumber();
+  const m = last && /^COMP-(\d+)$/.exec(last);
+  if(m) state.comprobanteCounter = Math.max(state.comprobanteCounter, Number(m[1]) + 1);
+}
+
+async function pagar(e){
   e.preventDefault();
+  if(guardandoPago) return;
   if(state.pfMesesCart.length===0){ $('#pfMonthError').textContent='Agrega al menos un mes antes de pagar.'; return; }
-  const comprobante=generarComprobante();
-  const mesesTexto=state.pfMesesCart.map(it=>it.mes==='Matricula'?'Matrícula':it.mes).join(', ');
-  const moraTotal=state.pfMesesCart.reduce((s,it)=>s+it.mora,0);
-  const total=state.pfMesesCart.reduce((s,it)=>s+it.subtotal,0);
-  const registro={comprobante,nie:$('#pfNie').value,student:$('#pfStudent').value,date:$('#pfDate').value,month:mesesTexto,items:state.pfMesesCart.map(it=>({...it})),moraTotal,total:total.toFixed(2)};
-  state.comprobanteCounter++; state.pagosRealizados.push(registro);
-  window.dispatchEvent(new CustomEvent('payments:updated'));
-  closePaymentModal(); generarComprobantePDF(registro);
-  alert(`Pago registrado con éxito.\nN° comprobante: ${comprobante}\nSe descargó el comprobante en PDF.`);
+  const btn=$('#pagarBtn'); guardandoPago=true; if(btn) btn.disabled=true;
+  try {
+    const sb=window.EduManagerSupabase, usaSupabase=Boolean(sb && sb.configured);
+    if(usaSupabase) await sincronizarContadorComprobante();
+    const comprobante=generarComprobante();
+    const mesesTexto=state.pfMesesCart.map(it=>itemLabel(it)).join(', ');
+    const moraTotal=state.pfMesesCart.reduce((s,it)=>s+it.mora,0);
+    const total=state.pfMesesCart.reduce((s,it)=>s+it.subtotal,0);
+    const registro={comprobante,nie:$('#pfNie').value,student:$('#pfStudent').value,date:$('#pfDate').value,month:mesesTexto,items:state.pfMesesCart.map(it=>({...it})),moraTotal,total:total.toFixed(2)};
+    if(usaSupabase){
+      await sb.insert('pagos',{NumRegistro:comprobante,estudiante:registro.student,fechaPago:registro.date,detallePago:mesesTexto,MoraTotal:Number(moraTotal.toFixed(2)),PagoTotal:Number(total.toFixed(2))});
+    }
+    state.comprobanteCounter++; state.pagosRealizados.push(registro);
+    window.dispatchEvent(new CustomEvent('payments:updated'));
+    closePaymentModal(); generarComprobantePDF(registro);
+    alert(`Pago registrado con éxito.\nN° comprobante: ${comprobante}\nSe descargó el comprobante en PDF.`);
+  } catch(err) {
+    console.error(err);
+    alert('No se pudo guardar el pago en Supabase. Intenta de nuevo.\n' + (err && err.message ? err.message : ''));
+    if(btn) btn.disabled=false;
+  } finally {
+    guardandoPago=false;
+  }
 }
 
 function initPayments(){
-  renderPayments(); renderPaymentStudents(); renderPfMesesCart();
+  loadPaymentTeachers(); renderPfMesesCart(); loadMensualidadesSelect();
+  $('#payFilterDocente').addEventListener('input', () => { resetPager('teachers'); renderPayments(); });
+  $('#payFilterGrado').addEventListener('change', () => { resetPager('teachers'); renderPayments(); });
+  $('#payFilterClear').addEventListener('click', () => { $('#payFilterDocente').value=''; $('#payFilterGrado').value=''; resetPager('teachers'); renderPayments(); });
   $('#paymentsTable').addEventListener('click',e=>{
-    const btn=e.target.closest('[data-action="view-payment"]'); if(btn) viewPayment(btn.dataset.teacher,btn.dataset.grade);
+    const btn=e.target.closest('[data-action="view-payment"]'); if(btn) viewPayment(btn.dataset.teacher,btn.dataset.grade,btn.dataset.grado,btn.dataset.seccion);
   });
   $('#paymentStudentsTable').addEventListener('click',e=>{
     const btn=e.target.closest('[data-action="make-payment"]'); if(btn) makePayment(btn.dataset.nie,btn.dataset.name);
@@ -610,6 +765,272 @@ async function initCatalogoMateriales(){
 
 // ===== js/main.js =====
 
+// ===== Catálogos de grados y secciones (Supabase) =====
+const GRADOS_STORAGE_KEY = 'edumanager.catalogo.grados.v1';
+const SECCIONES_STORAGE_KEY = 'edumanager.catalogo.secciones.v1';
+function loadSimpleLocal(storageKey){
+  try { const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]'); return Array.isArray(parsed) ? parsed.filter(i => i && typeof i.id === 'string' && typeof i.nombre === 'string') : []; } catch(error) { return []; }
+}
+function saveSimpleLocal(storageKey, list){ try { localStorage.setItem(storageKey, JSON.stringify(list)); } catch(error) { console.warn('No se pudo guardar la copia local.', error); } }
+let gradosCatalog = loadSimpleLocal(GRADOS_STORAGE_KEY);
+let seccionesCatalog = loadSimpleLocal(SECCIONES_STORAGE_KEY);
+const simpleCatalogs = {};
+
+async function fetchSimpleCatalog(type, storageKey){
+  if(!window.EduManagerSupabase || !window.EduManagerSupabase.configured) return loadSimpleLocal(storageKey);
+  const rows = await window.EduManagerSupabase.select(type);
+  return rows.map(row => ({id: String(row.id), nombre: String(row.nombre)}));
+}
+
+function setSelectValue(select, value){
+  if(value && ![...select.options].some(option => option.value === value)){
+    const option = document.createElement('option'); option.value = value; option.textContent = value; select.appendChild(option);
+  }
+  select.value = value;
+}
+
+function fillGradoSeccionSelects(failed){
+  const sets = [['Grado', gradosCatalog, 'Selecciona un grado', 'No hay grados en el catálogo'], ['Seccion', seccionesCatalog, 'Selecciona una sección', 'No hay secciones en el catálogo']];
+  sets.forEach(([suffix, list, label, emptyLabel]) => {
+    ['estudiante','docente'].forEach(key => {
+      const select = $('#' + key + suffix); if(!select) return;
+      const previous = select.value;
+      select.innerHTML = '';
+      const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.disabled = true; placeholder.selected = true;
+      placeholder.textContent = failed ? 'No se pudo cargar el catálogo' : (list.length ? label : emptyLabel);
+      select.appendChild(placeholder);
+      list.forEach(item => { const option = document.createElement('option'); option.value = item.nombre; option.textContent = item.nombre; select.appendChild(option); });
+      if(previous && list.some(item => item.nombre === previous)) select.value = previous;
+      const errorEl = $('#' + key + suffix + 'Error');
+      if(errorEl && failed) errorEl.textContent = 'No se pudo cargar el catálogo desde Supabase.';
+    });
+  });
+}
+
+async function refreshGradosSecciones(){
+  let failed = false;
+  try {
+    gradosCatalog = await fetchSimpleCatalog('grados', GRADOS_STORAGE_KEY);
+    seccionesCatalog = await fetchSimpleCatalog('secciones', SECCIONES_STORAGE_KEY);
+    saveSimpleLocal(GRADOS_STORAGE_KEY, gradosCatalog);
+    saveSimpleLocal(SECCIONES_STORAGE_KEY, seccionesCatalog);
+  } catch(error) { console.error(error); failed = true; }
+  fillGradoSeccionSelects(failed);
+  Object.values(simpleCatalogs).forEach(catalog => catalog.render());
+}
+
+function createSimpleCatalog(cfg){
+  const { key, plural, singular, type, codePrefix, storageKey, get, set } = cfg;
+  const Key = key.charAt(0).toUpperCase() + key.slice(1);
+  const el = suffix => $('#' + key + suffix);
+  let editingId = null;
+
+  function render(){
+    const tbody = $('#' + plural + 'CatalogTable'); if(!tbody) return;
+    const list = get();
+    if(list.length === 0){ tbody.innerHTML = `<tr><td colspan="3" class="catalog-empty">No hay ${plural} registrados en este catálogo.</td></tr>`; return; }
+    tbody.innerHTML = list.map((item,index) => `<tr><td>${codePrefix}-${String(index+1).padStart(3,'0')}</td><td>${escapeCatalogText(item.nombre)}</td><td><button type="button" class="view-btn" data-action="edit-${key}" data-id="${escapeCatalogText(item.id)}"><i class="bi bi-pencil-square"></i> Editar</button></td></tr>`).join('');
+  }
+  function clearError(){ el('NombreError').textContent = ''; el('Nombre').closest('.form-group').classList.remove('has-error'); }
+  function reset(){
+    el('Form').reset(); editingId = null;
+    el('FormTitle').textContent = 'Agregar ' + singular;
+    $('#guardar' + Key + 'Btn').innerHTML = '<i class="bi bi-plus-lg"></i> Agregar';
+    clearError();
+  }
+  function edit(id){
+    const item = get().find(row => row.id === id); if(!item) return;
+    editingId = id; el('Nombre').value = item.nombre;
+    el('FormTitle').textContent = 'Editar ' + singular;
+    $('#guardar' + Key + 'Btn').innerHTML = '<i class="bi bi-check-lg"></i> Guardar cambios';
+    clearError(); el('Nombre').focus();
+  }
+  async function persist(nombre){
+    const supabase = window.EduManagerSupabase;
+    if(supabase && supabase.configured){
+      if(editingId) await supabase.update(type, {id: editingId, nombre}); else await supabase.insert(type, {nombre});
+      return await fetchSimpleCatalog(type, storageKey);
+    }
+    const current = get();
+    if(editingId) return current.map(row => row.id === editingId ? {...row, nombre} : row);
+    const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${key}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return [...current, {id, nombre}];
+  }
+  function submit(event){
+    event.preventDefault();
+    const input = el('Nombre');
+    const nombre = input.value.trim().replace(/\s+/g,' ');
+    let error = nombre ? '' : 'Ingresa el nombre.';
+    if(!error && get().some(item => item.id !== editingId && item.nombre.toLocaleLowerCase() === nombre.toLocaleLowerCase())) error = `Ya existe un ${singular} con ese nombre.`;
+    el('NombreError').textContent = error;
+    input.closest('.form-group').classList.toggle('has-error', Boolean(error));
+    if(error){ input.focus(); return; }
+    persist(nombre).then(list => { set(list); saveSimpleLocal(storageKey, list); reset(); return refreshGradosSecciones(); }).catch(showCatalogSaveError);
+  }
+  simpleCatalogs[type] = { render };
+  return function init(){
+    if(!el('Form')) return;
+    render();
+    el('Form').addEventListener('submit', submit);
+    $('#limpiar' + Key + 'Btn').addEventListener('click', reset);
+    $('#' + plural + 'CatalogTable').addEventListener('click', event => {
+      const button = event.target.closest(`[data-action="edit-${key}"]`);
+      if(button) edit(button.dataset.id);
+    });
+  };
+}
+
+const initCatalogoGrados = createSimpleCatalog({ key:'grado', plural:'grados', singular:'grado', type:'grados', codePrefix:'GRA', storageKey:GRADOS_STORAGE_KEY, get:() => gradosCatalog, set:list => { gradosCatalog = list; } });
+const initCatalogoSecciones = createSimpleCatalog({ key:'seccion', plural:'secciones', singular:'sección', type:'secciones', codePrefix:'SEC', storageKey:SECCIONES_STORAGE_KEY, get:() => seccionesCatalog, set:list => { seccionesCatalog = list; } });
+
+// ===== Catálogos de estudiantes y docentes (Supabase) =====
+const personCatalogs = {};
+async function refreshPersonCatalogs(){
+  await Promise.all(Object.values(personCatalogs).map(catalog => catalog.refresh()));
+}
+
+function createPersonCatalog(cfg){
+  const { key, plural, type, codePrefix, storageKey, singular } = cfg;
+  const Key = key.charAt(0).toUpperCase() + key.slice(1);
+  const el = suffix => $('#' + key + suffix);
+  const fields = ['Nombres','Apellidos','Grado','Seccion'];
+  let items = loadLocal();
+  let editingId = null;
+
+  function loadLocal(){
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      return Array.isArray(parsed) ? parsed.filter(i => i && typeof i.id === 'string' && ['nombres','apellidos','grado','seccion'].every(k => typeof i[k] === 'string')) : [];
+    } catch(error) { return []; }
+  }
+  function saveLocal(){
+    try { localStorage.setItem(storageKey, JSON.stringify(items)); }
+    catch(error) { console.warn('No se pudo guardar la copia local.', error); }
+  }
+  async function fetchItems(){
+    const supabase = window.EduManagerSupabase;
+    if(!supabase || !supabase.configured) return loadLocal();
+    const rows = await supabase.select(type);
+    return rows.map(row => ({id: String(row.id), nombres: String(row.nombre), apellidos: String(row.apellido), grado: String(row.grado), seccion: String(row.seccion)}));
+  }
+  async function refresh(){
+    try { items = await fetchItems(); saveLocal(); } catch(error) { console.error(error); }
+    render();
+  }
+  async function persist(data){
+    const supabase = window.EduManagerSupabase;
+    if(supabase && supabase.configured){
+      const body = {nombre: data.nombres, apellido: data.apellidos, grado: data.grado, seccion: data.seccion};
+      if(editingId) await supabase.update(type, {id: editingId, ...body}); else await supabase.insert(type, body);
+      return await fetchItems();
+    }
+    if(editingId) return items.map(i => i.id === editingId ? {...i, ...data} : i);
+    const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${key}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return [...items, {id, ...data}];
+  }
+  function clearErrors(){
+    fields.forEach(f => { el(f + 'Error').textContent = ''; el(f).closest('.form-group').classList.remove('has-error'); });
+  }
+  function render(){
+    const tbody = $('#' + plural + 'CatalogTable');
+    if(!tbody) return;
+    if(items.length === 0){
+      tbody.innerHTML = `<tr><td colspan="6" class="catalog-empty">No hay ${plural} registrados en este catálogo.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map((item,index) => `<tr><td>${codePrefix}-${String(index+1).padStart(3,'0')}</td><td>${escapeCatalogText(item.nombres)}</td><td>${escapeCatalogText(item.apellidos)}</td><td>${escapeCatalogText(item.grado)}</td><td>${escapeCatalogText(item.seccion)}</td><td><button type="button" class="view-btn" data-action="edit-${key}" data-id="${escapeCatalogText(item.id)}"><i class="bi bi-pencil-square"></i> Editar</button></td></tr>`).join('');
+  }
+  function reset(){
+    el('Form').reset(); editingId = null;
+    el('FormTitle').textContent = 'Agregar ' + singular;
+    $('#guardar' + Key + 'Btn').innerHTML = '<i class="bi bi-plus-lg"></i> Agregar';
+    clearErrors();
+  }
+  function edit(id){
+    const item = items.find(row => row.id === id);
+    if(!item) return;
+    editingId = id;
+    el('Nombres').value = item.nombres;
+    el('Apellidos').value = item.apellidos;
+    setSelectValue(el('Grado'), item.grado);
+    setSelectValue(el('Seccion'), item.seccion);
+    el('FormTitle').textContent = 'Editar ' + singular;
+    $('#guardar' + Key + 'Btn').innerHTML = '<i class="bi bi-check-lg"></i> Guardar cambios';
+    clearErrors();
+    el('Nombres').focus();
+  }
+  function submit(event){
+    event.preventDefault();
+    const data = {
+      nombres: el('Nombres').value.trim().replace(/\s+/g,' '),
+      apellidos: el('Apellidos').value.trim().replace(/\s+/g,' '),
+      grado: el('Grado').value,
+      seccion: el('Seccion').value
+    };
+    const errors = {
+      Nombres: data.nombres ? '' : 'Ingresa los nombres.',
+      Apellidos: data.apellidos ? '' : 'Ingresa los apellidos.',
+      Grado: data.grado ? '' : 'Selecciona el grado.',
+      Seccion: data.seccion ? '' : 'Selecciona la sección.'
+    };
+    fields.forEach(f => {
+      el(f + 'Error').textContent = errors[f];
+      el(f).closest('.form-group').classList.toggle('has-error', Boolean(errors[f]));
+    });
+    const firstError = fields.find(f => errors[f]);
+    if(firstError){ el(firstError).focus(); return; }
+    const norm = s => s.toLocaleLowerCase();
+    const duplicate = items.some(i => i.id !== editingId && norm(i.nombres) === norm(data.nombres) && norm(i.apellidos) === norm(data.apellidos) && i.grado === data.grado && i.seccion === data.seccion);
+    if(duplicate){
+      el('NombresError').textContent = 'Ya existe un registro con esos datos.';
+      el('Nombres').closest('.form-group').classList.add('has-error');
+      el('Nombres').focus();
+      return;
+    }
+    persist(data).then(list => { items = list; saveLocal(); render(); reset(); }).catch(showCatalogSaveError);
+  }
+  personCatalogs[type] = { refresh };
+  return async function init(){
+    if(!el('Form')) return;
+    render();
+    el('Form').addEventListener('submit', submit);
+    $('#limpiar' + Key + 'Btn').addEventListener('click', reset);
+    $('#' + plural + 'CatalogTable').addEventListener('click', event => {
+      const button = event.target.closest(`[data-action="edit-${key}"]`);
+      if(button) edit(button.dataset.id);
+    });
+    await refresh();
+  };
+}
+
+const initCatalogoEstudiantes = createPersonCatalog({ key:'estudiante', plural:'estudiantes', singular:'estudiante', type:'estudiantes', codePrefix:'EST', storageKey:'edumanager.catalogo.estudiantes.v1' });
+const initCatalogoDocentes = createPersonCatalog({ key:'docente', plural:'docentes', singular:'docente', type:'docentes', codePrefix:'DOC', storageKey:'edumanager.catalogo.docentes.v1' });
+
+// ===== Estadísticas del dashboard desde Supabase =====
+async function refreshDashboardStats(){
+  const studentsEl = $('#dashboardStudentCount');
+  const incomeEl = $('#dashboardIncomeTotal');
+  if(!studentsEl || !incomeEl) return;
+  if(!window.EduManagerSupabase || !window.EduManagerSupabase.configured){
+    studentsEl.textContent = '—';
+    incomeEl.textContent = '—';
+    return;
+  }
+  try{
+    const [students, payments] = await Promise.all([
+      window.EduManagerSupabase.select('estudiantes'),
+      window.EduManagerSupabase.select('pagos')
+    ]);
+    studentsEl.textContent = students.length.toLocaleString('en-US');
+    const total = payments.reduce((sum, payment) => sum + (Number(payment.PagoTotal ?? payment.pagoTotal ?? 0) || 0), 0);
+    incomeEl.textContent = total.toLocaleString('en-US', {style:'currency', currency:'USD'});
+  }catch(error){
+    console.error('No se pudieron cargar las estadísticas del dashboard desde Supabase:', error);
+    studentsEl.textContent = '—';
+    incomeEl.textContent = '—';
+  }
+}
+
 function init(){
   initUI();
   initStudents();
@@ -619,9 +1040,15 @@ function init(){
   initMateriales();
   initCatalogoMensualidades();
   initCatalogoMateriales();
+  initCatalogoEstudiantes();
+  initCatalogoDocentes();
+  initCatalogoGrados();
+  initCatalogoSecciones();
+  refreshGradosSecciones();
   renderActivity();
+  refreshDashboardStats();
   showSection(location.hash.slice(1) || 'dashboard');
-  document.title = `${CONFIG.app.name} V15`;
+  document.title = `${CONFIG.app.name} V19.4`;
 }
 
 document.addEventListener('DOMContentLoaded', init);

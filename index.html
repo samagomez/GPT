@@ -27,6 +27,8 @@
         <a class="submenu-item" href="#catalog-mensualidades" data-section="catalog-mensualidades">Mensualidades</a>
         <a class="submenu-item" href="#catalog-estudiantes" data-section="catalog-estudiantes">Estudiantes</a>
         <a class="submenu-item" href="#catalog-docentes" data-section="catalog-docentes">Docentes</a>
+        <a class="submenu-item" href="#catalog-grados" data-section="catalog-grados">Grados</a>
+        <a class="submenu-item" href="#catalog-secciones" data-section="catalog-secciones">Secciones</a>
       </div>
     </nav>
     <div class="sidebar-footer"><div class="avatar">SG</div><div><strong>Administrador</strong><small>Admin</small></div></div>
@@ -43,9 +45,9 @@
       <div id="dashboard" class="section active-section">
         <div class="page-head"><div><h1>Dashboard</h1><p>Resumen general de la institución</p></div><button class="primary-btn" id="newStudent"><i class="bi bi-plus-lg"></i> Nuevo estudiante</button></div>
         <div class="stats-grid">
-          <div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people-fill"></i></div><div><span>Estudiantes</span><strong>1,248</strong><small class="up">+8.2% este mes</small></div></div>
+          <div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people-fill"></i></div><div><span>Estudiantes</span><strong id="dashboardStudentCount">—</strong><small class="up">+8.2% este mes</small></div></div>
           <div class="stat-card"><div class="stat-icon green"><i class="bi bi-person-check-fill"></i></div><div><span>Estudiantes activos</span><strong>1,186</strong><small class="up">+5.4% este mes</small></div></div>
-          <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-cash-stack"></i></div><div><span>Ingresos</span><strong>$12,450</strong><small class="up">+12.5% este mes</small></div></div>
+          <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-cash-stack"></i></div><div><span>Ingresos</span><strong id="dashboardIncomeTotal">—</strong><small class="up">+12.5% este mes</small></div></div>
         </div>
         <div class="dashboard-grid">
           <div class="panel"><div class="panel-head"><div><h2>Estudiantes recientes</h2><p>Últimos estudiantes registrados</p></div><a href="#students" data-section="students">Ver todos</a></div><div class="table-wrap"><table><thead><tr><th>Estudiante</th><th>Grado</th><th>Fecha de registro</th><th>Estado</th></tr></thead><tbody id="studentTable"></tbody></table></div></div>
@@ -54,7 +56,7 @@
       </div>
 
       <div id="students" class="section"><div class="page-head"><div><h1>Estudiantes</h1><p>Administración de estudiantes</p></div><button class="primary-btn" id="newStudent2"><i class="bi bi-plus-lg"></i> Nuevo estudiante</button></div><div class="panel"><div class="table-wrap"><table><thead><tr><th>Estudiante</th><th>Grado</th><th>Fecha de registro</th><th>Estado</th></tr></thead><tbody id="studentTableFull"></tbody></table></div></div></div>
-      <div id="payments" class="section"><div class="page-head"><div><h1>Pagos</h1><p>Gestión de pagos</p></div></div><div class="panel"><div class="panel-head"><div><h2>Pagos por docente</h2><p>Consulta la información de pagos por grado</p></div></div><div class="table-wrap"><table><thead><tr><th>Docente</th><th>Grado</th><th>Acción</th></tr></thead><tbody id="paymentsTable"></tbody></table></div></div></div><div id="paymentStudents" class="section"><div class="page-head"><div><h1>Estudiantes</h1><p>Consulta de estudiantes para pagos</p></div><button class="secondary-btn" id="backPayments"><i class="bi bi-arrow-left"></i> Volver</button></div><div class="panel"><div class="panel-head"><div><h2 id="paymentStudentsTitle">Estudiantes</h2><p>Listado de estudiantes asociados al docente y grado seleccionado</p></div></div><div class="table-wrap"><table><thead><tr><th>NIE</th><th>Estudiante</th><th>Acción</th></tr></thead><tbody id="paymentStudentsTable"></tbody></table></div></div></div>
+      <div id="payments" class="section"><div class="page-head"><div><h1>Pagos</h1><p>Gestión de pagos</p></div></div><div class="panel"><div class="panel-head"><div><h2>Pagos por docente</h2><p>Consulta la información de pagos por grado</p></div></div><div class="pay-filters"><div class="form-group"><label for="payFilterDocente">Docente</label><input type="text" id="payFilterDocente" list="payFilterDocenteList" placeholder="Buscar docente..." autocomplete="off"><datalist id="payFilterDocenteList"></datalist></div><div class="form-group"><label for="payFilterGrado">Grado</label><select id="payFilterGrado"><option value="">Todos los grados</option></select></div><button type="button" class="secondary-btn" id="payFilterClear"><i class="bi bi-x-lg"></i> Limpiar</button></div><div class="table-wrap"><table><thead><tr><th>Docente</th><th>Grado</th><th>Sección</th><th>Acción</th></tr></thead><tbody id="paymentsTable"></tbody></table></div><div class="pager" id="paymentsPager"></div></div></div><div id="paymentStudents" class="section"><div class="page-head"><div><h1>Estudiantes</h1><p>Consulta de estudiantes para pagos</p></div><button class="secondary-btn" id="backPayments"><i class="bi bi-arrow-left"></i> Volver</button></div><div class="panel"><div class="panel-head"><div><h2 id="paymentStudentsTitle">Estudiantes</h2><p>Listado de estudiantes asociados al docente y grado seleccionado</p></div></div><div class="table-wrap"><table><thead><tr><th>NIE</th><th>Estudiante</th><th>Acción</th></tr></thead><tbody id="paymentStudentsTable"></tbody></table></div><div class="pager" id="paymentStudentsPager"></div></div></div>
       <div id="paymentModalOverlay" class="modal-overlay">
         <div class="modal-box">
           <div class="modal-head">
@@ -82,19 +84,7 @@
               <div class="form-group" style="flex:2">
                 <label for="pfMonth">Mes a pagar</label>
                 <select id="pfMonth" name="month">
-                  <option value="" disabled selected>Selecciona un mes</option>
-                  <option value="Enero">Enero</option>
-                  <option value="Febrero">Febrero</option>
-                  <option value="Marzo">Marzo</option>
-                  <option value="Abril">Abril</option>
-                  <option value="Mayo">Mayo</option>
-                  <option value="Junio">Junio</option>
-                  <option value="Julio">Julio</option>
-                  <option value="Agosto">Agosto</option>
-                  <option value="Septiembre">Septiembre</option>
-                  <option value="Octubre">Octubre</option>
-                  <option value="Noviembre">Noviembre</option>
-                  <option value="Matricula">Matrícula</option>
+                  <option value="" disabled selected>Cargando mensualidades...</option>
                 </select>
                 <small class="field-error" id="pfMonthError"></small>
               </div>
@@ -218,7 +208,7 @@
 
       <div id="reports" class="section"><div class="page-head"><div><h1>Reportes</h1><p>Consulta comprobantes de pago por docente y grado</p></div></div><div class="panel"><div class="panel-head"><div><h2>Reporte por Grado</h2><p>Consulta el historial de pagos por grado</p></div></div><div class="table-wrap"><table><thead><tr><th>Grado</th><th>Acción</th></tr></thead><tbody id="reportsTable"></tbody></table></div></div></div>
       <div id="reportsGrade" class="section"><div class="page-head"><div><h1>Reporte por Grado</h1><p id="reportsGradeSubtitle">Mensualidades por alumno</p></div><button class="secondary-btn" id="backReports"><i class="bi bi-arrow-left"></i> Volver</button></div><div class="panel"><div class="table-wrap"><table class="coverage-table"><thead><tr id="reportsGradeHead"></tr></thead><tbody id="reportsGradeTable"></tbody></table></div></div></div>
-      <div id="settings" class="section"><div class="page-head"><div><h1>Configuración</h1><p>Configuración general del sistema</p></div></div><div class="panel"><div class="panel-head"><div><h2><i class="bi bi-collection"></i> Catálogos</h2><p>Administra los catálogos básicos de EduManager</p></div></div><div class="catalog-shortcuts"><a href="#catalog-materiales" data-section="catalog-materiales"><i class="bi bi-bag"></i><span><strong>Materiales</strong><small>Catálogo de materiales</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-mensualidades" data-section="catalog-mensualidades"><i class="bi bi-calendar-month"></i><span><strong>Mensualidades</strong><small>Conceptos y montos mensuales</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-estudiantes" data-section="catalog-estudiantes"><i class="bi bi-people"></i><span><strong>Estudiantes</strong><small>Catálogo de estudiantes</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-docentes" data-section="catalog-docentes"><i class="bi bi-person-workspace"></i><span><strong>Docentes</strong><small>Catálogo de docentes</small></span><i class="bi bi-chevron-right"></i></a></div></div></div>
+      <div id="settings" class="section"><div class="page-head"><div><h1>Configuración</h1><p>Configuración general del sistema</p></div></div><div class="panel"><div class="panel-head"><div><h2><i class="bi bi-collection"></i> Catálogos</h2><p>Administra los catálogos básicos de EduManager</p></div></div><div class="catalog-shortcuts"><a href="#catalog-materiales" data-section="catalog-materiales"><i class="bi bi-bag"></i><span><strong>Materiales</strong><small>Catálogo de materiales</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-mensualidades" data-section="catalog-mensualidades"><i class="bi bi-calendar-month"></i><span><strong>Mensualidades</strong><small>Conceptos y montos mensuales</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-estudiantes" data-section="catalog-estudiantes"><i class="bi bi-people"></i><span><strong>Estudiantes</strong><small>Catálogo de estudiantes</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-docentes" data-section="catalog-docentes"><i class="bi bi-person-workspace"></i><span><strong>Docentes</strong><small>Catálogo de docentes</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-grados" data-section="catalog-grados"><i class="bi bi-mortarboard"></i><span><strong>Grados</strong><small>Catálogo de grados</small></span><i class="bi bi-chevron-right"></i></a><a href="#catalog-secciones" data-section="catalog-secciones"><i class="bi bi-diagram-3"></i><span><strong>Secciones</strong><small>Catálogo de secciones</small></span><i class="bi bi-chevron-right"></i></a></div></div></div>
       <div id="catalog-materiales" class="section catalog-section">
         <div class="page-head"><div><h1>Catálogo de materiales</h1><p>Administra los conceptos y montos de los materiales</p></div></div>
         <div class="panel catalog-form-panel">
@@ -263,8 +253,8 @@
               <div class="form-group"><label for="estudianteApellidos">Apellidos</label><input type="text" id="estudianteApellidos" name="apellidos" maxlength="80" placeholder="Ej. Martínez López" required><small class="field-error" id="estudianteApellidosError"></small></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label for="estudianteGrado">Grado</label><select id="estudianteGrado" name="grado" required><option value="" disabled selected>Selecciona un grado</option><option value="1°">1°</option><option value="2°">2°</option><option value="3°">3°</option><option value="4°">4°</option><option value="5°">5°</option><option value="6°">6°</option><option value="7°">7°</option><option value="8°">8°</option><option value="9°">9°</option></select><small class="field-error" id="estudianteGradoError"></small></div>
-              <div class="form-group"><label for="estudianteSeccion">Sección</label><select id="estudianteSeccion" name="seccion" required><option value="" disabled selected>Selecciona una sección</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select><small class="field-error" id="estudianteSeccionError"></small></div>
+              <div class="form-group"><label for="estudianteGrado">Grado</label><select id="estudianteGrado" name="grado" required><option value="" disabled selected>Cargando grados...</option></select><small class="field-error" id="estudianteGradoError"></small></div>
+              <div class="form-group"><label for="estudianteSeccion">Sección</label><select id="estudianteSeccion" name="seccion" required><option value="" disabled selected>Cargando secciones...</option></select><small class="field-error" id="estudianteSeccionError"></small></div>
             </div>
             <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarEstudianteBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarEstudianteBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
           </form>
@@ -284,8 +274,8 @@
               <div class="form-group"><label for="docenteApellidos">Apellidos</label><input type="text" id="docenteApellidos" name="apellidos" maxlength="80" placeholder="Ej. Martínez López" required><small class="field-error" id="docenteApellidosError"></small></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label for="docenteGrado">Grado</label><select id="docenteGrado" name="grado" required><option value="" disabled selected>Selecciona un grado</option><option value="1°">1°</option><option value="2°">2°</option><option value="3°">3°</option><option value="4°">4°</option><option value="5°">5°</option><option value="6°">6°</option><option value="7°">7°</option><option value="8°">8°</option><option value="9°">9°</option></select><small class="field-error" id="docenteGradoError"></small></div>
-              <div class="form-group"><label for="docenteSeccion">Sección</label><select id="docenteSeccion" name="seccion" required><option value="" disabled selected>Selecciona una sección</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select><small class="field-error" id="docenteSeccionError"></small></div>
+              <div class="form-group"><label for="docenteGrado">Grado</label><select id="docenteGrado" name="grado" required><option value="" disabled selected>Cargando grados...</option></select><small class="field-error" id="docenteGradoError"></small></div>
+              <div class="form-group"><label for="docenteSeccion">Sección</label><select id="docenteSeccion" name="seccion" required><option value="" disabled selected>Cargando secciones...</option></select><small class="field-error" id="docenteSeccionError"></small></div>
             </div>
             <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarDocenteBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarDocenteBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
           </form>
@@ -293,6 +283,38 @@
         <div class="panel catalog-table-panel">
           <div class="panel-head"><div><h2>Docentes registrados</h2><p>Listado de registros ingresados</p></div></div>
           <div class="table-wrap"><table><thead><tr><th>Código</th><th>Nombres</th><th>Apellidos</th><th>Grado</th><th>Sección</th><th>Acción</th></tr></thead><tbody id="docentesCatalogTable"></tbody></table></div>
+        </div>
+      </div>
+      <div id="catalog-grados" class="section catalog-section">
+        <div class="page-head"><div><h1>Catálogo de grados</h1><p>Administra los grados de la institución</p></div></div>
+        <div class="panel catalog-form-panel">
+          <div class="panel-head"><div><h2><i class="bi bi-mortarboard"></i> <span id="gradoFormTitle">Agregar grado</span></h2><p>Ingresa el nombre del grado</p></div></div>
+          <form id="gradoForm" class="modal-form" novalidate>
+            <div class="form-row">
+              <div class="form-group"><label for="gradoNombre">Nombre</label><input type="text" id="gradoNombre" name="nombre" maxlength="50" placeholder="Ej. 6°" required><small class="field-error" id="gradoNombreError"></small></div>
+            </div>
+            <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarGradoBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarGradoBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+          </form>
+        </div>
+        <div class="panel catalog-table-panel">
+          <div class="panel-head"><div><h2>Grados registrados</h2><p>Listado de registros ingresados</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Acción</th></tr></thead><tbody id="gradosCatalogTable"></tbody></table></div>
+        </div>
+      </div>
+      <div id="catalog-secciones" class="section catalog-section">
+        <div class="page-head"><div><h1>Catálogo de secciones</h1><p>Administra los secciones de la institución</p></div></div>
+        <div class="panel catalog-form-panel">
+          <div class="panel-head"><div><h2><i class="bi bi-diagram-3"></i> <span id="seccionFormTitle">Agregar sección</span></h2><p>Ingresa el nombre de la sección</p></div></div>
+          <form id="seccionForm" class="modal-form" novalidate>
+            <div class="form-row">
+              <div class="form-group"><label for="seccionNombre">Nombre</label><input type="text" id="seccionNombre" name="nombre" maxlength="50" placeholder="Ej. A" required><small class="field-error" id="seccionNombreError"></small></div>
+            </div>
+            <div class="modal-actions catalog-form-actions"><button type="button" class="secondary-btn" id="limpiarSeccionBtn"><i class="bi bi-eraser-fill"></i> Limpiar</button><button type="submit" class="primary-btn" id="guardarSeccionBtn"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+          </form>
+        </div>
+        <div class="panel catalog-table-panel">
+          <div class="panel-head"><div><h2>Secciones registrados</h2><p>Listado de registros ingresados</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Acción</th></tr></thead><tbody id="seccionesCatalogTable"></tbody></table></div>
         </div>
       </div>
     </section>

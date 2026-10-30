@@ -29,9 +29,7 @@ export const CONFIG = {
     {icon:'file-earmark-text-fill', text:'Reporte generado', detail:'Reporte mensual', time:'Hace 2 horas'}
   ],
   paymentRules: {
-    moraPorMes: 3.00,
-    valorMensualidad: 25.00,
-    valorMatricula: 50.00
+    moraPorMes: 3.00
   }
 };
 

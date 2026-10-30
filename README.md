@@ -1,4 +1,4 @@
-# EduManager V16
+# EduManager V19.4
 
 Versión reorganizada de EduManager V13 con separación de responsabilidades.
 
@@ -42,3 +42,36 @@ Abre `index.html` en un navegador moderno. Se requiere conexión a Internet para
 ## V16
 
 El select `matMaterial` del submódulo Materiales ya no usa valores fijos: se llena con `catalogo_materiales` de Supabase (se recarga al abrir la sección). El precio del carrito sale del monto del catálogo.
+
+## V16.1
+
+El select `pfMonth` del formulario de pago se llena con `catalogo_mensualidades` de Supabase (concepto y monto). El valor base de cada mes sale del catálogo; la mora ($3.00 por mes de atraso) se sigue calculando para conceptos que contengan un nombre de mes, y la matrícula no genera mora.
+
+## V17
+
+- Configuración › Catálogos: nuevos submódulos **Grados** y **Secciones** (un solo campo: Nombre), conectados a Supabase (`catalogo_grados`, `catalogo_secciones`). Ejecutar `supabase-schema.sql` para crearlas.
+- Los selects de Grado y Sección de los catálogos de Estudiantes y Docentes se llenan desde esas tablas.
+- `app.js` es el archivo activo; `js/` no se carga desde `index.html`.
+- Modal "Registrar pago" ampliado (hasta 960 px de ancho).
+
+## V18
+
+- Nuevas tablas `catalogo_estudiantes` y `catalogo_docentes` (nombre, apellido, grado, seccion). Script: `supabase-schema-v18.sql` (también incluido al final de `supabase-schema.sql`).
+- Los catálogos de Estudiantes y Docentes ahora leen, agregan y editan en Supabase (con copia local de respaldo si Supabase no está configurado), igual que Materiales y Mensualidades.
+
+## V19.1
+
+- Pagos: la tabla "Pagos por docente" muestra los datos de `catalogo_docentes` (docente, grado, sección).
+- Filtros por docente (búsqueda) y por grado.
+
+## V19.2
+
+- Pagos › Ver: la pantalla de estudiantes muestra los alumnos del grado y sección del docente desde `catalogo_estudiantes`.
+
+## V19.3
+
+- Paginado de 10 en 10 en Pagos y en Estudiantes de pagos.
+
+## V19.4
+
+- Al registrar un pago en el modal se guarda en la tabla `Pagos` de Supabase (NumRegistro, estudiante, fechaPago, detallePago, MoraTotal, PagoTotal). Script: `supabase-schema-v19.4.sql`.
